@@ -17,9 +17,11 @@ coverage/
 .env
 .env.*
 *.env
-/backend/.env
-/frontend/.env
 *.env.*
+/backend/.env
+/backend/.env.*
+/frontend/.env
+/frontend/.env.*
 
 # OS & editor
 .DS_Store
