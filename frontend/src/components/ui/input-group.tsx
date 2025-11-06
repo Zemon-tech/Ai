@@ -14,8 +14,15 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="input-group"
       role="group"
       className={cn(
-        "group/input-group border-input dark:bg-input/30 relative flex w-full items-center rounded-md border shadow-xs transition-[color,box-shadow] outline-none",
+        "group/input-group border-input bg-card dark:bg-card relative flex w-full items-center rounded-md border shadow-xs transition-[color,box-shadow] outline-none",
+        // Allow inline controls and wrapping when needed
+        "flex-wrap",
+        // Height rules
         "h-9 min-w-0 has-[>textarea]:h-auto",
+        // When textarea is multiline, make layout stack naturally
+        "has-[>textarea[data-multiline=true]]:items-start has-[>textarea[data-multiline=true]]:gap-2",
+        // Make the textarea take full width on its own row when multiline
+        "[&>textarea[data-multiline=true]]:basis-full [&>textarea[data-multiline=true]]:w-full",
 
         // Variants based on alignment.
         "has-[>[data-align=inline-start]]:[&>input]:pl-2",
@@ -144,21 +151,21 @@ function InputGroupInput({
   )
 }
 
-function InputGroupTextarea({
-  className,
-  ...props
-}: React.ComponentProps<"textarea">) {
-  return (
+const InputGroupTextarea = React.forwardRef<HTMLTextAreaElement, React.ComponentProps<"textarea">>(
+  ({ className, ...props }, ref) => (
     <Textarea
+      ref={ref}
       data-slot="input-group-control"
       className={cn(
-        "flex-1 resize-none rounded-none border-0 bg-transparent py-3 shadow-none focus-visible:ring-0 dark:bg-transparent",
+        "flex-1 resize-none rounded-none border-0 bg-card dark:bg-card py-3 shadow-none focus-visible:ring-0",
         className
       )}
       {...props}
     />
   )
-}
+)
+
+InputGroupTextarea.displayName = "InputGroupTextarea"
 
 export {
   InputGroup,

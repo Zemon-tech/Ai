@@ -24,6 +24,23 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { SettingsIcon, LogOutIcon, SparklesIcon, HelpCircleIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -698,6 +715,213 @@ function SidebarMenuSubButton({
   )
 }
 
+type SidebarUserButtonProps = {
+  email: string
+  name?: string
+  avatarUrl?: string
+  onLogout?: () => void
+}
+
+function SidebarUserButton({ email, name, avatarUrl, onLogout }: SidebarUserButtonProps) {
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const [personalOpen, setPersonalOpen] = React.useState(false)
+  const [helpOpen, setHelpOpen] = React.useState(false)
+
+  // Theme state
+  const [theme, setTheme] = React.useState<'system' | 'light' | 'dark'>(() =>
+    (localStorage.getItem('theme') as 'system' | 'light' | 'dark') || 'system'
+  )
+  const [accent, setAccent] = React.useState<string>(() =>
+    localStorage.getItem('accent') || '' // empty = neutral, no accent
+  )
+
+  // Apply theme
+  const applyTheme = React.useCallback((t: 'system' | 'light' | 'dark') => {
+    const root = document.documentElement
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)')
+    const setDark = (on: boolean) => root.classList.toggle('dark', on)
+
+    if (t === 'system') {
+      setDark(systemPrefersDark.matches)
+    } else {
+      setDark(t === 'dark')
+    }
+  }, [])
+
+  // Watch system theme when in system mode
+  React.useEffect(() => {
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = () => {
+      if (theme === 'system') applyTheme('system')
+    }
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [theme, applyTheme])
+
+  // Apply current theme/accent on mount and when changed
+  React.useEffect(() => {
+    applyTheme(theme)
+    localStorage.setItem('theme', theme)
+  }, [theme, applyTheme])
+
+  React.useEffect(() => {
+    const root = document.documentElement
+    if (accent && accent.length > 0) {
+      root.setAttribute('data-accent', accent)
+    } else {
+      root.removeAttribute('data-accent')
+    }
+    localStorage.setItem('accent', accent)
+  }, [accent])
+
+  return (
+    <div className="mt-auto p-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="w-full flex items-center gap-3 rounded-md px-2 py-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+            <Avatar className="size-8 ring-1 ring-sidebar-border">
+              <AvatarImage src={avatarUrl} alt={name || email} />
+              <AvatarFallback>{(name || email)?.slice(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 text-left">
+              <div className="text-sm font-medium truncate">{name || 'User'}</div>
+              <div className="text-xs text-muted-foreground truncate">{email}</div>
+            </div>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel className="truncate opacity-70 flex items-center justify-between gap-2">
+            <span className="truncate">{email}</span>
+            <span className="inline-flex items-center gap-1 text-xs opacity-80">
+              <span>Accent</span>
+              <span
+                className="inline-block size-3 rounded-full border"
+                style={{
+                  background: accent ? 'var(--color-primary)' : 'transparent',
+                }}
+                aria-label={accent || 'neutral'}
+                title={accent || 'neutral'}
+              />
+            </span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setPersonalOpen(true)} className="gap-2">
+            <SparklesIcon className="size-4" /> Personalization
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="gap-2">
+            <SettingsIcon className="size-4" /> Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setHelpOpen(true)} className="gap-2">
+            <HelpCircleIcon className="size-4" /> Help
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onLogout} className="gap-2 text-destructive focus:text-destructive">
+            <LogOutIcon className="size-4" /> Log out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Settings Dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Settings</DialogTitle>
+            <DialogDescription>Manage your preferences.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-1 border-r pr-2 space-y-1">
+              <div className="text-sm font-medium px-2 py-1">General</div>
+              <div className="text-sm font-medium px-2 py-1 opacity-60">Notifications</div>
+              <div className="text-sm font-medium px-2 py-1 opacity-60">Account</div>
+            </div>
+            <div className="sm:col-span-2 space-y-6">
+              <section className="space-y-2">
+                <div className="text-sm font-medium">Theme</div>
+                <div className="text-xs text-muted-foreground">Choose how the interface looks. Uses system preference when set to System.</div>
+                <div className="flex gap-2">
+                  {(['system','light','dark'] as const).map((t) => (
+                    <button
+                      key={t}
+                      aria-pressed={theme===t}
+                      onClick={() => {
+                        setTheme(t)
+                        // When forcing light/dark, use neutral (no accent) by default.
+                        if (t !== 'system') setAccent('')
+                      }}
+                      className={cn(
+                        'px-3 py-1.5 rounded-md border text-sm',
+                        theme===t ? 'bg-primary text-primary-foreground border-primary' : ''
+                      )}
+                    >
+                      {t[0].toUpperCase()+t.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section className="space-y-2">
+                <div className="text-sm font-medium">Accent color</div>
+                <div className="grid grid-cols-4 gap-2">
+                  {['blue','violet','emerald','rose','indigo','cyan','teal','orange','amber','pink'].map((c) => (
+                    <button
+                      key={c}
+                      aria-label={c}
+                      onClick={() => setAccent(c)}
+                      className={cn(
+                        'h-9 rounded-md border flex items-center justify-center text-xs capitalize',
+                        accent===c ? 'ring-2 ring-primary' : ''
+                      )}
+                      style={{
+                        // preview swatch using oklch via current theme tokens in CSS
+                        background:
+                          c==='blue' ? 'oklch(0.624 0.171 254.624)' :
+                          c==='violet' ? 'oklch(0.594 0.244 300.31)' :
+                          c==='emerald' ? 'oklch(0.74 0.154 160.59)' :
+                          'oklch(0.65 0.25 17.75)',
+                        color: 'white'
+                      }}
+                    >{c}</button>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Personalization Dialog */}
+      <Dialog open={personalOpen} onOpenChange={setPersonalOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Personalization</DialogTitle>
+            <DialogDescription>Adjust how the assistant responds.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="text-sm">Tone</label>
+            <div className="flex gap-2">
+              <button className="px-3 py-1 rounded-md border">Formal</button>
+              <button className="px-3 py-1 rounded-md border">Casual</button>
+              <button className="px-3 py-1 rounded-md border">Friendly</button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Help Dialog */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Help</DialogTitle>
+            <DialogDescription>Find answers and contact support.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p>Check the documentation or reach out to support@example.com.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 export {
   Sidebar,
   SidebarContent,
@@ -723,4 +947,5 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  SidebarUserButton,
 }

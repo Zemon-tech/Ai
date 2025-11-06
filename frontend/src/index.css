@@ -131,3 +131,52 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Disable rubber-band overscroll/bounce and black flash */
+html, body, #root {
+  height: 100%;
+  overscroll-behavior: none;
+  background: var(--color-background);
+}
+
+/* Accent color themes (override primary tokens). "neutral" = no data-accent attr */
+:root[data-accent="blue"] {
+  --primary: oklch(0.624 0.171 254.624);
+  --primary-foreground: oklch(0.985 0 0);
+}
+:root[data-accent="violet"] {
+  --primary: oklch(0.594 0.244 300.31);
+  --primary-foreground: oklch(0.985 0 0);
+}
+:root[data-accent="emerald"] {
+  --primary: oklch(0.74 0.154 160.59);
+  --primary-foreground: oklch(0.141 0.005 285.823);
+}
+:root[data-accent="rose"] {
+  --primary: oklch(0.65 0.25 17.75);
+  --primary-foreground: oklch(0.985 0 0);
+}
+:root[data-accent="indigo"] {
+  --primary: oklch(0.55 0.2 276);
+  --primary-foreground: oklch(0.985 0 0);
+}
+:root[data-accent="cyan"] {
+  --primary: oklch(0.79 0.13 210);
+  --primary-foreground: oklch(0.141 0.005 285.823);
+}
+:root[data-accent="teal"] {
+  --primary: oklch(0.72 0.12 180);
+  --primary-foreground: oklch(0.141 0.005 285.823);
+}
+:root[data-accent="orange"] {
+  --primary: oklch(0.72 0.17 60);
+  --primary-foreground: oklch(0.141 0.005 285.823);
+}
+:root[data-accent="amber"] {
+  --primary: oklch(0.86 0.17 85);
+  --primary-foreground: oklch(0.21 0.006 285.885);
+}
+:root[data-accent="pink"] {
+  --primary: oklch(0.73 0.24 350);
+  --primary-foreground: oklch(0.985 0 0);
+}

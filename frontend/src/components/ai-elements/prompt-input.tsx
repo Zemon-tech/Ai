@@ -172,6 +172,9 @@ export function PromptInputProvider({
     );
   }, []);
 
+  
+
+
   const remove = useCallback((id: string) => {
     setAttachements((prev) => {
       const found = prev.find((f) => f.id === id);
@@ -420,6 +423,11 @@ export type PromptInputProps = Omit<
     message: PromptInputMessage,
     event: FormEvent<HTMLFormElement>
   ) => void | Promise<void>;
+  /**
+   * Extra className applied to the inner InputGroup so callers can style
+   * the pill container (rounded corners, background, border) like ChatGPT.
+   */
+  groupClassName?: string;
 };
 
 export const PromptInput = ({
@@ -433,6 +441,7 @@ export const PromptInput = ({
   onError,
   onSubmit,
   children,
+  groupClassName,
   ...props
 }: PromptInputProps) => {
   // Try to use a provider controller if present
@@ -736,7 +745,7 @@ export const PromptInput = ({
         onSubmit={handleSubmit}
         {...props}
       >
-        <InputGroup>{children}</InputGroup>
+        <InputGroup className={cn(groupClassName)}>{children}</InputGroup>
       </form>
     </>
   );
@@ -772,6 +781,35 @@ export const PromptInputTextarea = ({
   const controller = useOptionalPromptInputController();
   const attachments = usePromptInputAttachments();
   const [isComposing, setIsComposing] = useState(false);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isMultiline, setIsMultiline] = useState(false);
+
+  const autosize = useCallback(() => {
+    const el = taRef.current;
+    if (!el) return;
+    const styles = window.getComputedStyle(el);
+    const line = parseFloat(styles.lineHeight || '20');
+    const padTop = parseFloat(styles.paddingTop || '0');
+    const padBottom = parseFloat(styles.paddingBottom || '0');
+    const baseH = line + padTop + padBottom; // one line height including paddings
+    const maxLines = 3;
+    const maxH = line * maxLines + padTop + padBottom;
+
+    // Reset to natural height before measuring
+    el.style.height = 'auto';
+
+    // If empty, collapse to base height
+    if (!el.value || el.value.length === 0) {
+      el.style.height = `${baseH}px`;
+      setIsMultiline(false);
+      return;
+    }
+
+    const scrollH = el.scrollHeight;
+    const nextH = Math.min(maxH, Math.max(baseH, scrollH));
+    el.style.height = `${nextH}px`;
+    setIsMultiline(nextH > baseH + 1);
+  }, []);
 
   const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
     if (e.key === "Enter") {
@@ -829,19 +867,27 @@ export const PromptInputTextarea = ({
         onChange: (e: ChangeEvent<HTMLTextAreaElement>) => {
           controller.textInput.setInput(e.currentTarget.value);
           onChange?.(e);
+          // After value change, re-measure
+          queueMicrotask(autosize);
         },
       }
     : {
-        onChange,
+        onChange: (e: ChangeEvent<HTMLTextAreaElement>) => {
+          onChange?.(e);
+          queueMicrotask(autosize);
+        },
       };
 
   return (
     <InputGroupTextarea
-      className={cn("field-sizing-content max-h-48 min-h-16", className)}
+      ref={taRef}
+      className={cn("field-sizing-content min-h-0 overflow-y-auto py-2 text-sm leading-6", className)}
       name="message"
+      rows={1}
+      data-multiline={isMultiline ? 'true' : 'false'}
       onCompositionEnd={() => setIsComposing(false)}
       onCompositionStart={() => setIsComposing(true)}
-      onKeyDown={handleKeyDown}
+      onKeyDown={(e) => { handleKeyDown(e); queueMicrotask(autosize); }}
       onPaste={handlePaste}
       placeholder={placeholder}
       {...props}
@@ -876,8 +922,14 @@ export const PromptInputFooter = ({
   ...props
 }: PromptInputFooterProps) => (
   <InputGroupAddon
-    align="block-end"
-    className={cn("justify-between gap-1", className)}
+    align="inline-end"
+    className={cn(
+      // Default inline with textarea
+      "justify-between gap-1",
+      // When textarea becomes multiline, move footer to the next line and stretch
+      "group-has-[>textarea[data-multiline=true]]/input-group:order-last group-has-[>textarea[data-multiline=true]]/input-group:basis-full group-has-[>textarea[data-multiline=true]]/input-group:px-1 group-has-[>textarea[data-multiline=true]]/input-group:pt-1",
+      className
+    )}
     {...props}
   />
 );

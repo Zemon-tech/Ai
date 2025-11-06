@@ -1,4 +1,6 @@
 import { Response, NextFunction } from 'express';
+import { readFileSync, existsSync } from 'fs';
+import path from 'path';
 import createError from 'http-errors';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { ConversationModel } from '../models/Conversation';
@@ -6,6 +8,26 @@ import { MessageModel } from '../models/Message';
 import { env } from '../config/env';
 import { createOpenAI } from '@ai-sdk/openai';
 import { streamText } from 'ai';
+
+// Load system prompt from file with fallback
+const SYSTEM_PROMPT: string = (() => {
+  const candidates = [
+    // Build output relative to compiled file
+    path.resolve(__dirname, '../prompts/system.md'),
+    // Monorepo/workspace execution from project root (ts-node/dev)
+    path.resolve(process.cwd(), 'backend/src/prompts/system.md'),
+    // Possible dist prompt alongside compiled output
+    path.resolve(process.cwd(), 'backend/dist/prompts/system.md'),
+  ];
+  for (const p of candidates) {
+    try {
+      if (existsSync(p)) {
+        return readFileSync(p, 'utf8');
+      }
+    } catch {}
+  }
+  return 'You are a helpful assistant.';
+})();
 
 // POST /api/ai/stream
 // body: { conversationId?: string, message: string }
@@ -38,6 +60,7 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
       response = await streamText({
         model: openAI.chat(modelId),
         messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: message },
         ],
       });

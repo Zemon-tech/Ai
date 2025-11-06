@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../components/ui/button';
 import { Message, MessageContent } from '@/components/ai-elements/message';
+import { Response as AIResponse } from '@/components/ai-elements/response';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import { PromptInput, PromptInputTextarea, PromptInputFooter, PromptInputSubmit } from '@/components/ai-elements/prompt-input';
 import { useAuth } from '../context/AuthContext';
-import { PlusIcon, LogOutIcon, Trash2Icon } from 'lucide-react';
+import { PlusIcon, Trash2Icon, CopyIcon } from 'lucide-react';
+import { Actions, Action } from '@/components/ai-elements/actions';
 import {
   SidebarProvider,
   Sidebar,
@@ -21,6 +24,7 @@ import {
   SidebarInset,
   SidebarTrigger,
   SidebarRail,
+  SidebarUserButton,
 } from '@/components/ui/sidebar';
 
 type Conversation = { _id: string; title: string };
@@ -132,14 +136,16 @@ export default function Chat() {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
-          <Button variant="ghost" className="w-full justify-start" onClick={logout}>
-            <LogOutIcon className="mr-2 size-4" /> Logout
-          </Button>
+          <SidebarUserButton
+            email={user?.email || 'user@example.com'}
+            name={user?.name}
+            onLogout={logout}
+          />
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <header className="h-14 border-b px-4 flex items-center justify-between">
+        <header className="sticky top-0 z-20 h-14 border-b px-4 flex items-center justify-between bg-background">
           <div className="flex items-center gap-2">
             <SidebarTrigger />
             <div className="font-semibold">Quild AI Studio</div>
@@ -148,19 +154,44 @@ export default function Chat() {
             <div className="hidden sm:block">{user?.email}</div>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.map((m, idx) => (
-            <Message key={idx} from={m.role}>
-              <MessageContent>{m.content}</MessageContent>
-            </Message>
-          ))}
+        <div className="flex-1 overflow-visible">
+          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8 py-6 pb-28 space-y-6">
+            {messages.map((m, idx) => (
+              m.role === 'assistant' ? (
+                <div key={idx} className="w-full">
+                  <AIResponse className="prose dark:prose-invert max-w-none">
+                    {m.content}
+                  </AIResponse>
+                  <Actions className="mt-2">
+                    <Action
+                      tooltip="Copy"
+                      label="Copy"
+                      onClick={() => navigator.clipboard?.writeText(m.content)}
+                    >
+                      <CopyIcon className="size-4" />
+                    </Action>
+                  </Actions>
+                </div>
+              ) : (
+                <Message key={idx} from={m.role}>
+                  <MessageContent>{m.content}</MessageContent>
+                </Message>
+              )
+            ))}
+            {streaming && !assistantBuffer.current && (
+              <div className="w-full">
+                <Shimmer className="text-base">Thinking…</Shimmer>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="p-4 border-t">
-          <div className="max-w-3xl mx-auto">
+        <div className="sticky bottom-0 z-20 pointer-events-none">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pointer-events-auto">
             <PromptInput
               onSubmit={async ({ text }) => {
                 if (text) await onSend(text);
               }}
+              groupClassName="rounded-2xl bg-card px-3 py-2 border border-input shadow-xs"
             >
               <PromptInputTextarea placeholder="Send a message" />
               <PromptInputFooter>
