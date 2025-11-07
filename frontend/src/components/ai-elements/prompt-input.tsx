@@ -764,7 +764,7 @@ export const PromptInput = ({
         onSubmit={handleSubmit}
         {...props}
       >
-        <InputGroup className={cn(groupClassName)}>{children}</InputGroup>
+        <InputGroup className={cn(groupClassName, "rounded-full")}>{children}</InputGroup>
       </form>
     </>
   );
@@ -964,6 +964,15 @@ export const PromptInputHeader = ({
   />
 );
 
+export type PromptInputLeftAddonProps = Omit<
+  ComponentProps<typeof InputGroupAddon>,
+  "align"
+>;
+
+export const PromptInputLeftAddon = ({ className, ...props }: PromptInputLeftAddonProps) => (
+  <InputGroupAddon align="inline-start" className={cn("gap-1", className)} {...props} />
+);
+
 export type PromptInputFooterProps = Omit<
   ComponentProps<typeof InputGroupAddon>,
   "align"
@@ -1084,7 +1093,7 @@ export const PromptInputSubmit = ({
   return (
     <InputGroupButton
       aria-label="Submit"
-      className={cn(className)}
+      className={cn("rounded-full", className)}
       size={size}
       type="submit"
       variant={variant}

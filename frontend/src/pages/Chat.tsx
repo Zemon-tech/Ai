@@ -4,7 +4,18 @@ import { Button } from '../components/ui/button';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Response as AIResponse } from '@/components/ai-elements/response';
 import { Shimmer } from '@/components/ai-elements/shimmer';
-import { PromptInput, PromptInputTextarea, PromptInputFooter, PromptInputSubmit } from '@/components/ai-elements/prompt-input';
+import {
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputLeftAddon,
+  PromptInputActionMenu,
+  PromptInputActionMenuTrigger,
+  PromptInputActionMenuContent,
+  PromptInputActionMenuItem,
+  PromptInputActionAddAttachments,
+} from '@/components/ai-elements/prompt-input';
 import { useAuth } from '../context/AuthContext';
 import { PlusIcon, Trash2Icon, CopyIcon } from 'lucide-react';
 import { Actions, Action } from '@/components/ai-elements/actions';
@@ -177,13 +188,27 @@ export default function Chat() {
             <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8 py-8 min-h-[calc(80vh-3rem)] flex flex-col items-center justify-center text-center gap-6">
               <div className="text-muted-foreground text-2xl sm:text-3xl">{salutation}, {displayName}</div>
               <div className="text-3xl sm:text-4xl font-semibold tracking-tight">What's on the agenda today?</div>
-              <div className="w-full max-w-3xl">
+              <div className="w-full max-w-4xl">
                 <PromptInput
                   onSubmit={async ({ text }) => {
                     if (text) await onSend(text);
                   }}
                   groupClassName="rounded-3xl bg-card px-3 py-2 border border-input shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-input"
                 >
+                  <PromptInputLeftAddon>
+                    <PromptInputActionMenu>
+                      <PromptInputActionMenuTrigger>
+                        <PlusIcon className="size-4" />
+                      </PromptInputActionMenuTrigger>
+                      <PromptInputActionMenuContent>
+                        <PromptInputActionAddAttachments />
+                        <PromptInputActionMenuItem>Create image</PromptInputActionMenuItem>
+                        <PromptInputActionMenuItem>Thinking</PromptInputActionMenuItem>
+                        <PromptInputActionMenuItem>Deep research</PromptInputActionMenuItem>
+                        <PromptInputActionMenuItem>Study and learn</PromptInputActionMenuItem>
+                      </PromptInputActionMenuContent>
+                    </PromptInputActionMenu>
+                  </PromptInputLeftAddon>
                   <PromptInputTextarea
                     placeholder=""
                     suggestions={[
@@ -193,6 +218,7 @@ export default function Chat() {
                       'Brainstorm feature ideas',
                     ]}
                     suggestionInterval={3000}
+                    className="py-2"
                   />
                   <PromptInputFooter>
                     <div />
@@ -235,16 +261,27 @@ export default function Chat() {
         </div>
         {messages.length > 0 && (
           <div className="sticky bottom-0 z-20 pointer-events-none">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pointer-events-auto">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pointer-events-auto">
               <PromptInput
                 onSubmit={async ({ text }) => {
                   if (text) await onSend(text);
                 }}
                 groupClassName="rounded-3xl bg-card px-3 py-2 border border-input shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-input"
               >
+                <PromptInputLeftAddon>
+                  <PromptInputActionMenu>
+                    <PromptInputActionMenuTrigger>
+                      <PlusIcon className="size-4" />
+                    </PromptInputActionMenuTrigger>
+                    <PromptInputActionMenuContent>
+                      <PromptInputActionAddAttachments />
+                    </PromptInputActionMenuContent>
+                  </PromptInputActionMenu>
+                </PromptInputLeftAddon>
                 <PromptInputTextarea
                   placeholder="Send a message"
                   suggestions={[]}
+                  className="py-2"
                 />
                 <PromptInputFooter>
                   <div />
