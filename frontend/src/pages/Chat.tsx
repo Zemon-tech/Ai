@@ -174,7 +174,7 @@ export default function Chat() {
         <NavHeader />
         <div className="flex-1 overflow-visible">
           {messages.length === 0 ? (
-            <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8 py-16 min-h-[60vh] flex flex-col items-center justify-center text-center gap-6">
+            <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8 py-8 min-h-[calc(80vh-3rem)] flex flex-col items-center justify-center text-center gap-6">
               <div className="text-muted-foreground text-2xl sm:text-3xl">{salutation}, {displayName}</div>
               <div className="text-3xl sm:text-4xl font-semibold tracking-tight">What's on the agenda today?</div>
               <div className="w-full max-w-3xl">
@@ -184,7 +184,16 @@ export default function Chat() {
                   }}
                   groupClassName="rounded-3xl bg-card px-3 py-2 border border-input shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-input"
                 >
-                  <PromptInputTextarea placeholder="Ask anything…" />
+                  <PromptInputTextarea
+                    placeholder=""
+                    suggestions={[
+                      'Ask how to structure an essay',
+                      'Ask for social media captions',
+                      'Summarize this document',
+                      'Brainstorm feature ideas',
+                    ]}
+                    suggestionInterval={3000}
+                  />
                   <PromptInputFooter>
                     <div />
                     <PromptInputSubmit status={streaming ? 'streaming' : undefined} />
@@ -233,7 +242,10 @@ export default function Chat() {
                 }}
                 groupClassName="rounded-3xl bg-card px-3 py-2 border border-input shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-input"
               >
-                <PromptInputTextarea placeholder="Send a message" />
+                <PromptInputTextarea
+                  placeholder="Send a message"
+                  suggestions={[]}
+                />
                 <PromptInputFooter>
                   <div />
                   <PromptInputSubmit status={streaming ? 'streaming' : undefined} />

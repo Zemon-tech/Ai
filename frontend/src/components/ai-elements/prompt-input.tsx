@@ -428,6 +428,8 @@ export type PromptInputProps = Omit<
    * the pill container (rounded corners, background, border) like ChatGPT.
    */
   groupClassName?: string;
+  /** When true, hide the input until the user interacts (click/focus/type). */
+  revealOnFocus?: boolean;
 };
 
 export const PromptInput = ({
@@ -442,6 +444,7 @@ export const PromptInput = ({
   onSubmit,
   children,
   groupClassName,
+  revealOnFocus,
   ...props
 }: PromptInputProps) => {
   // Try to use a provider controller if present
@@ -452,6 +455,7 @@ export const PromptInput = ({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const [revealed, setRevealed] = useState(!revealOnFocus);
 
   // Find nearest form to scope drag & drop
   useEffect(() => {
@@ -460,6 +464,14 @@ export const PromptInput = ({
       formRef.current = root;
     }
   }, []);
+
+  // Reveal input if requested once the user interacts
+  useEffect(() => {
+    if (!revealOnFocus) return;
+    const onKey = () => setRevealed(true);
+    window.addEventListener("keydown", onKey, { once: true });
+    return () => window.removeEventListener("keydown", onKey);
+  }, [revealOnFocus]);
 
   // ----- Local attachments (only used when no provider)
   const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
@@ -741,7 +753,14 @@ export const PromptInput = ({
         type="file"
       />
       <form
-        className={cn("w-full", className)}
+        className={cn(
+          "w-full mx-auto",
+          // Hidden state when revealOnFocus is enabled
+          revealOnFocus && !revealed && "opacity-0 pointer-events-none h-0 overflow-hidden",
+          className
+        )}
+        onFocusCapture={() => setRevealed(true)}
+        onClick={() => setRevealed(true)}
         onSubmit={handleSubmit}
         {...props}
       >
@@ -770,12 +789,17 @@ export const PromptInputBody = ({
 
 export type PromptInputTextareaProps = ComponentProps<
   typeof InputGroupTextarea
->;
+> & {
+  suggestions?: string[];
+  suggestionInterval?: number;
+};
 
 export const PromptInputTextarea = ({
   onChange,
   className,
   placeholder = "What would you like to know?",
+  suggestions = [],
+  suggestionInterval = 3000,
   ...props
 }: PromptInputTextareaProps) => {
   const controller = useOptionalPromptInputController();
@@ -783,6 +807,8 @@ export const PromptInputTextarea = ({
   const [isComposing, setIsComposing] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const [isMultiline, setIsMultiline] = useState(false);
+  const [currentPlaceholder, setCurrentPlaceholder] = useState(placeholder);
+  const [rotIndex, setRotIndex] = useState(0);
 
   const autosize = useCallback(() => {
     const el = taRef.current;
@@ -861,6 +887,32 @@ export const PromptInputTextarea = ({
     }
   };
 
+  useEffect(() => {
+    setCurrentPlaceholder(placeholder);
+  }, [placeholder]);
+
+  useEffect(() => {
+    if (!suggestions.length) return;
+    let timer: number | undefined;
+    const run = () => {
+      const focused = document.activeElement === taRef.current;
+      const hasVal = controller
+        ? controller.textInput.value.length > 0
+        : !!taRef.current?.value?.length;
+      if (focused || hasVal) {
+        setCurrentPlaceholder("");
+      } else {
+        setCurrentPlaceholder(suggestions[rotIndex % suggestions.length]);
+        setRotIndex((i) => (i + 1) % suggestions.length);
+      }
+      timer = window.setTimeout(run, suggestionInterval);
+    };
+    timer = window.setTimeout(run, suggestionInterval);
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [suggestions, suggestionInterval, controller, rotIndex]);
+
   const controlledProps = controller
     ? {
         value: controller.textInput.value,
@@ -889,7 +941,7 @@ export const PromptInputTextarea = ({
       onCompositionStart={() => setIsComposing(true)}
       onKeyDown={(e) => { handleKeyDown(e); queueMicrotask(autosize); }}
       onPaste={handlePaste}
-      placeholder={placeholder}
+      placeholder={currentPlaceholder}
       {...props}
       {...controlledProps}
     />
