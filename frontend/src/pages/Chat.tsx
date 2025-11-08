@@ -17,7 +17,7 @@ import {
   PromptInputActionAddAttachments,
 } from '@/components/ai-elements/prompt-input';
 import { useAuth } from '../context/AuthContext';
-import { PlusIcon, Trash2Icon, CopyIcon } from 'lucide-react';
+import { PlusIcon, Trash2Icon, CopyIcon, PanelLeftIcon } from 'lucide-react';
 import { Actions, Action } from '@/components/ai-elements/actions';
 import {
   SidebarProvider,
@@ -124,11 +124,20 @@ export default function Chat() {
   }
 
   function NavHeader() {
-    const { state } = useSidebar();
+    const { toggleSidebar, state } = useSidebar();
     return (
       <header className="sticky top-0 z-20 h-12 border-b px-4 flex items-center justify-between bg-background">
         <div className="flex items-center gap-2">
-          {state === 'collapsed' && <SidebarTrigger />}
+          {state === 'collapsed' && (
+            <button
+              aria-label="Toggle sidebar"
+              className="group inline-flex items-center"
+              onClick={toggleSidebar}
+            >
+              <img src="/logo.svg" alt="Quild AI" className="h-6 w-auto dark:invert block group-hover:hidden" />
+              <PanelLeftIcon className="size-4 hidden group-hover:block" />
+            </button>
+          )}
           <div className="font-semibold">Quild AI Studio</div>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground" />
@@ -139,8 +148,11 @@ export default function Chat() {
   return (
     <SidebarProvider>
       <Sidebar collapsible="offcanvas">
-        <SidebarHeader>
-          <div className="flex items-center justify-between gap-2">
+        <SidebarHeader className="h-12 items-center">
+          <div className="flex items-center gap-2 px-2 h-12">
+            <img src="/logo.svg" alt="Quild AI" className="h-6 w-auto dark:invert" />
+          </div>
+          <div className="flex items-center justify-between gap-2 h-12">
             <Button onClick={newChat} className="justify-start h-8 px-2 text-sm" size="sm" variant="ghost">
               <PlusIcon className="mr-2 size-4" /> New Chat
             </Button>

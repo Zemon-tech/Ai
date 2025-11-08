@@ -51,16 +51,35 @@ export const api = {
   ai: {
     stream: (body: { conversationId?: string; message: string }, onDelta: (text: string) => void) => {
       const url = `${API_BASE}/ai/stream`;
-      // We cannot send body with EventSource; use fetch with SSE polyfill via text/event-stream is non-trivial in browser.
-      // Use fetch and read stream manually instead.
-      return fetch(url, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }).then(async (res) => {
+      async function start() {
+        const res = await fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        // Handle expired access token: try refresh once, then retry
+        if (res.status === 401) {
+          try {
+            await api.auth.refresh();
+          } catch {
+            throw new Error('Unauthorized');
+          }
+          const retry = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!retry.ok || !retry.body) throw new Error('Stream failed');
+          return retry;
+        }
         if (!res.ok || !res.body) throw new Error('Stream failed');
-        const reader = res.body.getReader();
+        return res;
+      }
+
+      return start().then(async (res) => {
+        const reader = res.body!.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
         while (true) {

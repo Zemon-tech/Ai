@@ -69,6 +69,9 @@ export default function Auth({ initialMode = 'login' }: AuthProps) {
 
       <div className="relative col-span-1 md:col-span-2 flex items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-6">
+          <div className="flex justify-center mb-8">
+            <img src="/logo.svg" alt="Quild AI" className="h-16 w-auto dark:invert" />
+          </div>
           <form onSubmit={onSubmit} className="space-y-4">
             <h1 className="text-2xl font-semibold text-center">{mode === 'login' ? 'Welcome back' : 'Create account'}</h1>
             {error && <div className="text-red-600 text-sm text-center">{error}</div>}
