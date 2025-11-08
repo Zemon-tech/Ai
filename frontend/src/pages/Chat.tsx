@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
-import { Button } from '../components/ui/button';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Response as AIResponse } from '@/components/ai-elements/response';
 import { Shimmer } from '@/components/ai-elements/shimmer';
@@ -17,7 +16,7 @@ import {
   PromptInputActionAddAttachments,
 } from '@/components/ai-elements/prompt-input';
 import { useAuth } from '../context/AuthContext';
-import { PlusIcon, Trash2Icon, CopyIcon, PanelLeftIcon } from 'lucide-react';
+import { PlusIcon, Trash2Icon, CopyIcon, PanelLeftIcon, BookOpen, Globe, FolderPlus, ChevronDown } from 'lucide-react';
 import { Actions, Action } from '@/components/ai-elements/actions';
 import {
   SidebarProvider,
@@ -48,6 +47,7 @@ export default function Chat() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [chatsOpen, setChatsOpen] = useState<boolean>(true);
   const assistantBuffer = useRef('');
 
   const displayName = (user?.name || user?.email || 'there').split(' ')[0].split('@')[0];
@@ -153,35 +153,72 @@ export default function Chat() {
             <img src="/logo.svg" alt="Quild AI" className="h-6 w-auto dark:invert" />
           </div>
           <div className="flex items-center justify-between gap-2 h-12">
-            <Button onClick={newChat} className="justify-start h-8 px-2 text-sm" size="sm" variant="ghost">
-              <PlusIcon className="mr-2 size-4" /> New Chat
-            </Button>
             <SidebarTrigger hideWhenExpanded={false} />
           </div>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Chats</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {conversations.map((c) => (
-                  <SidebarMenuItem key={c._id}>
-                    <SidebarMenuButton
-                      isActive={activeId === c._id}
-                      onClick={() => selectConversation(c._id)}
-                    >
-                      <span>{c.title}</span>
-                    </SidebarMenuButton>
-                    <SidebarMenuAction
-                      aria-label="Delete"
-                      onClick={(e) => { e.preventDefault(); removeChat(c._id); }}
-                    >
-                      <Trash2Icon className="size-4" />
-                    </SidebarMenuAction>
-                  </SidebarMenuItem>
-                ))}
+                <SidebarMenuItem>
+                  <SidebarMenuButton onClick={newChat}>
+                    <PlusIcon />
+                    <span>New chat</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton>
+                    <BookOpen />
+                    <span>Library</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton>
+                    <Globe />
+                    <span>Atlas</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton>
+                    <FolderPlus />
+                    <span>Projects</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center justify-between cursor-pointer select-none" asChild>
+              <button onClick={() => setChatsOpen((v) => !v)}>
+                <div className="flex items-center gap-2">
+                  <span>Chats</span>
+                </div>
+                <ChevronDown className={`transition-transform ${chatsOpen ? '' : '-rotate-90'}`} />
+              </button>
+            </SidebarGroupLabel>
+            {chatsOpen && (
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {conversations.map((c) => (
+                    <SidebarMenuItem key={c._id}>
+                      <SidebarMenuButton
+                        isActive={activeId === c._id}
+                        onClick={() => selectConversation(c._id)}
+                      >
+                        <span>{c.title}</span>
+                      </SidebarMenuButton>
+                      <SidebarMenuAction
+                        aria-label="Delete"
+                        onClick={(e) => { e.preventDefault(); removeChat(c._id); }}
+                      >
+                        <Trash2Icon className="size-4" />
+                      </SidebarMenuAction>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            )}
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
