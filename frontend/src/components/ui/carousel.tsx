@@ -176,16 +176,23 @@ function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
     if (!el || !api || !wheelGestures) return
     let acc = 0
     let last = 0
-    const THRESH = 40
-    const COOLDOWN = 220
+    let lastSign = 0
+    const THRESH = 160
+    const COOLDOWN = 340
     const onWheel = (e: WheelEvent) => {
-      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+      const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.5
+      const delta = horizontal ? e.deltaX : e.deltaY
       if (delta === 0) return
-      e.preventDefault()
+      if (horizontal) e.preventDefault()
       const now = Date.now()
+      const sign = delta > 0 ? 1 : -1
+      if (sign !== lastSign) {
+        acc = 0
+        lastSign = sign
+      }
       acc += delta
       if (Math.abs(acc) >= THRESH && now - last >= COOLDOWN) {
-        if (acc > 0) {
+        if (sign > 0) {
           api.scrollNext()
         } else {
           api.scrollPrev()
