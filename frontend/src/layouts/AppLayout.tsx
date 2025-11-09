@@ -110,7 +110,11 @@ export default function AppLayout() {
       <Sidebar collapsible="offcanvas">
         <SidebarHeader className="h-12 items-center">
           <div className="flex items-center gap-2 px-2 h-12">
-            <img src="/logo.svg" alt="Quild AI" className="h-6 w-auto dark:invert" />
+            <img src="/logo.svg" alt="2 knot" className="h-6 w-auto dark:invert block flex-shrink-0" />
+            <div className="flex h-6 items-center">
+              <span className="font-gween text-[20px] leading-none">2</span>
+              <span className="font-gween text-[20px] leading-none ml-1">knot</span>
+            </div>
           </div>
           <div className="flex items-center justify-between gap-2 h-12">
             <SidebarTrigger hideWhenExpanded={false} />

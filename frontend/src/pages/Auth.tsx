@@ -68,9 +68,12 @@ export default function Auth({ initialMode = 'login' }: AuthProps) {
       </div>
 
       <div className="relative col-span-1 md:col-span-2 flex items-center justify-center p-6">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="flex justify-center mb-8">
-            <img src="/logo.svg" alt="Quild AI" className="h-16 w-auto dark:invert" />
+        <div className="w-full max-w-sm space-y-1">
+          <div className="flex justify-center">
+            <div className="flex items-center translate-x-[2px]">
+              <span className="font-gween text-6xl leading-none">2</span>
+              <span className="font-gween text-6xl leading-none ml-1s">knot</span>
+            </div>
           </div>
           <form onSubmit={onSubmit} className="space-y-4">
             <h1 className="text-2xl font-semibold text-center">{mode === 'login' ? 'Welcome back' : 'Create account'}</h1>

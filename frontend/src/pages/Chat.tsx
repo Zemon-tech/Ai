@@ -169,7 +169,6 @@ export default function Chat() {
               <PanelLeftIcon className="size-4 hidden group-hover:block" />
             </button>
           )}
-          <div className="font-semibold">Quild AI Studio</div>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground" />
       </header>
