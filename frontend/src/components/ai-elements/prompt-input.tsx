@@ -808,7 +808,9 @@ export const PromptInputTextarea = ({
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const [isMultiline, setIsMultiline] = useState(false);
   const [currentPlaceholder, setCurrentPlaceholder] = useState(placeholder);
-  const [rotIndex, setRotIndex] = useState(0);
+  const rotIndexRef = useRef(0);
+  const [flipClass, setFlipClass] = useState("");
+  const flipRafRef = useRef<number | null>(null);
 
   const autosize = useCallback(() => {
     const el = taRef.current;
@@ -891,9 +893,27 @@ export const PromptInputTextarea = ({
     setCurrentPlaceholder(placeholder);
   }, [placeholder]);
 
+  // Restart flip animation whenever the suggestion placeholder text changes
+  useEffect(() => {
+    // Remove then re-add the class on the next frames to restart CSS animation
+    setFlipClass("");
+    const id = requestAnimationFrame(() => {
+      flipRafRef.current = requestAnimationFrame(() => setFlipClass("suggestion-flip"));
+    });
+    return () => {
+      cancelAnimationFrame(id);
+      if (flipRafRef.current != null) {
+        cancelAnimationFrame(flipRafRef.current);
+        flipRafRef.current = null;
+      }
+    };
+  }, [currentPlaceholder]);
+
   useEffect(() => {
     if (!suggestions.length) return;
     let timer: number | undefined;
+    // reset rotation index whenever suggestions change
+    rotIndexRef.current = 0;
     const run = () => {
       const focused = document.activeElement === taRef.current;
       const hasVal = controller
@@ -902,16 +922,18 @@ export const PromptInputTextarea = ({
       if (focused || hasVal) {
         setCurrentPlaceholder("");
       } else {
-        setCurrentPlaceholder(suggestions[rotIndex % suggestions.length]);
-        setRotIndex((i) => (i + 1) % suggestions.length);
+        const idx = rotIndexRef.current % suggestions.length;
+        setCurrentPlaceholder(suggestions[idx]);
+        rotIndexRef.current = (rotIndexRef.current + 1) % suggestions.length;
       }
       timer = window.setTimeout(run, suggestionInterval);
     };
-    timer = window.setTimeout(run, suggestionInterval);
+    // Show the first suggestion immediately
+    timer = window.setTimeout(run, 0);
     return () => {
       if (timer) window.clearTimeout(timer);
     };
-  }, [suggestions, suggestionInterval, controller, rotIndex]);
+  }, [suggestions, suggestionInterval, controller]);
 
   const controlledProps = controller
     ? {
@@ -933,7 +955,7 @@ export const PromptInputTextarea = ({
   return (
     <InputGroupTextarea
       ref={taRef}
-      className={cn("field-sizing-content min-h-0 overflow-y-auto py-2 text-sm leading-6", className)}
+      className={cn("field-sizing-content min-h-0 overflow-y-auto py-2 text-sm leading-6", flipClass, className)}
       name="message"
       rows={1}
       data-multiline={isMultiline ? 'true' : 'false'}

@@ -205,3 +205,21 @@ html, body, #root {
 .font-gween {
   font-family: 'Gween Imory', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
+
+/* Flip animation for rotating suggestion text (applied to the input element) */
+@keyframes suggestion-flip {
+  0% {
+    transform: perspective(600px) rotateX(90deg);
+    opacity: 0;
+  }
+  100% {
+    transform: perspective(600px) rotateX(0deg);
+    opacity: 1;
+  }
+}
+
+.suggestion-flip {
+  animation: suggestion-flip 450ms ease-out both;
+  transform-origin: 50% 50%;
+  backface-visibility: hidden;
+}
