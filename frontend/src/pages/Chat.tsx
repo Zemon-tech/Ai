@@ -16,42 +16,20 @@ import {
   PromptInputActionAddAttachments,
 } from '@/components/ai-elements/prompt-input';
 import { useAuth } from '../context/AuthContext';
-import { PlusIcon, CopyIcon, PanelLeftIcon, BookOpen, FolderPlus, ChevronDown, Home as HomeIcon } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { PlusIcon, CopyIcon, PanelLeftIcon } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { Actions, Action } from '@/components/ai-elements/actions';
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarFooter,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarMenuActionsMenu,
-  SidebarInset,
-  SidebarTrigger,
-  SidebarRail,
-  SidebarUserButton,
-  useSidebar,
-} from '@/components/ui/sidebar';
+import { useSidebar } from '@/components/ui/sidebar';
 
-type Conversation = { _id: string; title: string };
 type Message = { _id?: string; role: 'user' | 'assistant'; content: string };
 
 export default function Chat() {
-  const { logout, user } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
-  const [chatsOpen, setChatsOpen] = useState<boolean>(true);
   const assistantBuffer = useRef('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
 
   const displayName = (user?.name || user?.email || 'there').split(' ')[0].split('@')[0];
   const salutation = (() => {
@@ -62,17 +40,33 @@ export default function Chat() {
     return 'Good evening';
   })();
 
+  // React to URL param `c` for active conversation selection
   useEffect(() => {
-    (async () => {
-      try {
-        const { conversations } = await api.conversations.list();
-        setConversations(conversations as any);
-        if (conversations[0]?._id) {
-          selectConversation(conversations[0]._id);
-        }
-      } catch {}
-    })();
-  }, []);
+    const id = searchParams.get('c');
+    if (id && id !== activeId) {
+      selectConversation(id);
+    } else if (!id) {
+      // If no conversation specified, pick the first and sync URL
+      (async () => {
+        try {
+          const { conversations } = await api.conversations.list();
+          if (conversations[0]?._id) {
+            const first = conversations[0]._id as string;
+            setSearchParams((sp) => {
+              const next = new URLSearchParams(sp);
+              next.set('c', first);
+              return next;
+            });
+            await selectConversation(first);
+          } else {
+            setActiveId(null);
+            setMessages([]);
+          }
+        } catch {}
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   async function selectConversation(id: string) {
     setActiveId(id);
@@ -111,13 +105,6 @@ export default function Chat() {
       if (!finalConvId && activeId) finalConvId = activeId;
 
       // Generate/update concise title and refresh list
-      if (finalConvId) {
-        try {
-          await api.ai.title(finalConvId);
-        } catch {}
-      }
-      const { conversations } = await api.conversations.list();
-      setConversations(conversations as any);
       if (!activeId && finalConvId) setActiveId(finalConvId);
     } catch (e) {
       // noop
@@ -126,41 +113,7 @@ export default function Chat() {
     }
   }
 
-  async function newChat() {
-    const res = await api.conversations.create('New Chat');
-    setConversations((c) => [res.conversation, ...c]);
-    setActiveId(res.conversation._id);
-    setMessages([]);
-  }
-
-  async function removeChat(id: string) {
-    await api.conversations.remove(id);
-    setConversations((c) => c.filter((x) => x._id !== id));
-    if (activeId === id) {
-      setActiveId(null);
-      setMessages([]);
-    }
-  }
-
-  function startEditing(id: string) {
-    const current = conversations.find((x) => x._id === id)?.title || '';
-    setEditingId(id);
-    setEditValue(current);
-  }
-
-  async function saveRename(id: string, title: string) {
-    const t = title.trim();
-    setEditingId(null);
-    if (!t) return;
-    try {
-      const res = await api.conversations.rename(id, t);
-      setConversations((c) => c.map((x) => (x._id === id ? res.conversation : x)));
-    } catch {}
-  }
-
-  function cancelEditing() {
-    setEditingId(null);
-  }
+  // Chat no longer manages the sidebar list; creation/selection is handled in layout.
 
   function NavHeader() {
     const { toggleSidebar, state } = useSidebar();
@@ -185,116 +138,9 @@ export default function Chat() {
   }
 
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="offcanvas">
-        <SidebarHeader className="h-12 items-center">
-          <div className="flex items-center gap-2 px-2 h-12">
-            <img src="/logo.svg" alt="Quild AI" className="h-6 w-auto dark:invert" />
-          </div>
-          <div className="flex items-center justify-between gap-2 h-12">
-            <SidebarTrigger hideWhenExpanded={false} />
-          </div>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link to="/home">
-                      <HomeIcon />
-                      <span>Home</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton onClick={newChat}>
-                    <PlusIcon />
-                    <span>New chat</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton>
-                    <BookOpen />
-                    <span>Library</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton>
-                    <FolderPlus />
-                    <span>Projects</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-
-          <SidebarGroup>
-            <SidebarGroupLabel className="flex items-center justify-between cursor-pointer select-none" asChild>
-              <button onClick={() => setChatsOpen((v) => !v)}>
-                <div className="flex items-center gap-2">
-                  <span>Chats</span>
-                </div>
-                <ChevronDown className={`transition-transform ${chatsOpen ? '' : '-rotate-90'}`} />
-              </button>
-            </SidebarGroupLabel>
-            {chatsOpen && (
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {conversations.map((c) => (
-                    <SidebarMenuItem key={c._id}>
-                      <SidebarMenuButton
-                        isActive={activeId === c._id}
-                        onClick={() => {
-                          if (editingId) return;
-                          selectConversation(c._id);
-                        }}
-                      >
-                        {editingId === c._id ? (
-                          <input
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            autoFocus
-                            onFocus={(e) => e.currentTarget.select()}
-                            onBlur={() => saveRename(c._id, editValue)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                (e.currentTarget as HTMLInputElement).blur();
-                              } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                cancelEditing();
-                              }
-                            }}
-                            className="bg-transparent outline-none border-0 focus:ring-0 w-full truncate"
-                          />
-                        ) : (
-                          <span>{c.title}</span>
-                        )}
-                      </SidebarMenuButton>
-                      <SidebarMenuActionsMenu
-                        onRename={() => startEditing(c._id)}
-                        onDelete={() => removeChat(c._id)}
-                      />
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            )}
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter>
-          <SidebarUserButton
-            email={user?.email || 'user@example.com'}
-            name={user?.name}
-            onLogout={logout}
-          />
-        </SidebarFooter>
-        <SidebarRail />
-      </Sidebar>
-      <SidebarInset>
-        <NavHeader />
-        <div className="flex-1 overflow-visible">
+    <>
+      <NavHeader />
+      <div className="flex-1 overflow-visible">
           {messages.length === 0 ? (
             <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8 py-8 min-h-[calc(80vh-3rem)] flex flex-col items-center justify-center text-center gap-6">
               <div className="text-muted-foreground text-2xl sm:text-3xl">{salutation}, {displayName}</div>
@@ -369,10 +215,10 @@ export default function Chat() {
               )}
             </div>
           )}
-        </div>
-        {messages.length > 0 && (
-          <div className="sticky bottom-0 z-20 pointer-events-none">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pointer-events-auto">
+      </div>
+      {messages.length > 0 && (
+        <div className="sticky bottom-0 z-20 pointer-events-none">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pointer-events-auto">
               <PromptInput
                 onSubmit={async ({ text }) => {
                   if (text) await onSend(text);
@@ -402,8 +248,7 @@ export default function Chat() {
             </div>
           </div>
         )}
-      </SidebarInset>
-    </SidebarProvider>
+    </>
   );
 }
 
