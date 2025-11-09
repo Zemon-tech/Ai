@@ -109,7 +109,14 @@ export default function Chat() {
       // Ensure we have the conversation id for newly created chats
       if (!finalConvId && activeId) finalConvId = activeId;
 
-      // Generate/update concise title and refresh list
+      // Generate/update concise title and refresh sidebar list
+      if (finalConvId) {
+        try {
+          await api.ai.title(finalConvId);
+          window.dispatchEvent(new CustomEvent('conversations:refresh'));
+        } catch {}
+      }
+
       if (!activeId && finalConvId) setActiveId(finalConvId);
     } catch (e) {
       // noop
@@ -250,17 +257,19 @@ export default function Chat() {
           )}
       </div>
       {((!streaming && !atBottom) || (streaming && atTop)) && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30">
-          <button
-            aria-label="Get to latest"
-            className="px-3 py-1.5 rounded-full bg-background/30 hover:bg-background/40 border border-border/60 shadow-md backdrop-blur-md text-foreground text-xs font-medium"
-            onClick={() => {
-              setAutoScroll(true);
-              window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-            }}
-          >
-            Get to latest
-          </button>
+        <div className="sticky bottom-24 z-30">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-center">
+            <button
+              aria-label="Get to latest"
+              className="px-3 py-1.5 rounded-full bg-background/30 hover:bg-background/40 border border-border/60 shadow-md backdrop-blur-md text-foreground text-xs font-medium"
+              onClick={() => {
+                setAutoScroll(true);
+                window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+              }}
+            >
+              Get to latest
+            </button>
+          </div>
         </div>
       )}
       {messages.length > 0 && (

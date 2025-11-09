@@ -46,6 +46,24 @@ export default function AppLayout() {
     })();
   }, []);
 
+  // Refresh sidebar list when chats are updated elsewhere (e.g., title generation)
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const { conversations } = await api.conversations.list();
+        setConversations(conversations as any);
+      } catch {}
+    };
+    window.addEventListener('conversations:refresh', handler as EventListener);
+    return () => window.removeEventListener('conversations:refresh', handler as EventListener);
+  }, []);
+
+  // Keep active item in sync with the URL param `c`
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get('c');
+    if (id && id !== activeId) setActiveId(id);
+  }, [location.search]);
+
   async function newChat() {
     const res = await api.conversations.create('New Chat');
     setConversations((c) => [res.conversation, ...c]);
