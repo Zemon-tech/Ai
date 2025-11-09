@@ -16,7 +16,7 @@ import {
   PromptInputActionAddAttachments,
 } from '@/components/ai-elements/prompt-input';
 import { useAuth } from '../context/AuthContext';
-import { PlusIcon, CopyIcon, PanelLeftIcon, ArrowDown } from 'lucide-react';
+import { PlusIcon, CopyIcon, PanelLeftIcon } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { Actions, Action } from '@/components/ai-elements/actions';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -250,16 +250,16 @@ export default function Chat() {
           )}
       </div>
       {((!streaming && !atBottom) || (streaming && atTop)) && (
-        <div className="fixed bottom-24 right-6 z-30">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30">
           <button
-            aria-label="Scroll to bottom"
-            className="p-2 rounded-full bg-background/60 hover:bg-background/80 border border-border shadow-sm backdrop-blur text-foreground"
+            aria-label="Get to latest"
+            className="px-3 py-1.5 rounded-full bg-background/30 hover:bg-background/40 border border-border/60 shadow-md backdrop-blur-md text-foreground text-xs font-medium"
             onClick={() => {
               setAutoScroll(true);
               window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
             }}
           >
-            <ArrowDown className="size-4" />
+            Get to latest
           </button>
         </div>
       )}
