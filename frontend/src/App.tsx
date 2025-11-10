@@ -18,6 +18,7 @@ function App() {
       <Route path="/auth" element={<Auth />} />
       <Route element={<Protected><AppLayout /></Protected>}>
         <Route path="/" element={<Chat />} />
+        <Route path="/c/:id" element={<Chat />} />
         <Route path="/home" element={<Home />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -7,6 +7,7 @@ import { ConversationModel } from '../models/Conversation';
 import { MessageModel } from '../models/Message';
 import { env } from '../config/env';
 import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenRouterClient, getOpenRouterModelId } from '../ai/openrouterProvider';
 import { streamText, generateText } from 'ai';
 
 // Load system prompt from file with fallback
@@ -52,9 +53,18 @@ export async function generateConversationTitle(req: AuthenticatedRequest, res: 
       .join('\n')
       .slice(0, 8000); // keep prompt bounded
 
-    const baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
-    const modelId = (env as any).GEMINI_MODEL || 'gemini-2.0-flash';
-    const openAI = createOpenAI({ apiKey: env.GEMINI_API_KEY, baseURL });
+    const provider = (req.body?.provider as 'gemini' | 'openrouter' | undefined) || env.AI_PROVIDER;
+    let modelId: string;
+    let openAIProvider: ReturnType<typeof createOpenAI>;
+
+    if (provider === 'openrouter') {
+      openAIProvider = createOpenRouterClient();
+      modelId = getOpenRouterModelId();
+    } else {
+      const baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+      modelId = (env as any).GEMINI_MODEL || 'gemini-2.0-flash';
+      openAIProvider = createOpenAI({ apiKey: env.GEMINI_API_KEY, baseURL });
+    }
 
     const system = `You generate ultra-concise chat titles.
 Rules:
@@ -65,7 +75,7 @@ Rules:
 Return only the title.`;
 
     const { text } = await generateText({
-      model: openAI.chat(modelId),
+      model: openAIProvider.chat(modelId),
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: `Conversation transcript (truncated):\n\n${combined}` },
@@ -122,19 +132,38 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
     // Save user message
     await MessageModel.create({ conversationId: convId, userId, role: 'user', content: message });
 
-    // Use Google Gemini via OpenAI-compatible endpoint (chat.completions)
-    const baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
-    const modelId = (env as any).GEMINI_MODEL || 'gemini-2.0-flash';
-    const openAI = createOpenAI({ apiKey: env.GEMINI_API_KEY, baseURL });
+    // Select provider (Gemini default) or OpenRouter via OpenAI-compatible SDK
+    const provider = (req.body as any)?.provider as 'gemini' | 'openrouter' | undefined || env.AI_PROVIDER;
+    let modelId: string;
+    let openAIProvider: ReturnType<typeof createOpenAI>;
+    if (provider === 'openrouter') {
+      openAIProvider = createOpenRouterClient();
+      modelId = getOpenRouterModelId();
+    } else {
+      const baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+      modelId = (env as any).GEMINI_MODEL || 'gemini-2.0-flash';
+      openAIProvider = createOpenAI({ apiKey: env.GEMINI_API_KEY, baseURL });
+    }
 
     let response;
     try {
+      // Fetch full conversation history and include it for context (limited to recent turns for safety)
+      const history = await MessageModel.find({ conversationId: convId, userId })
+        .sort({ createdAt: 1 })
+        .lean();
+
+      // Keep only the most recent 30 turns (messages) to stay well within context limits
+      const MAX_TURNS = 30;
+      const recent = history.slice(Math.max(0, history.length - MAX_TURNS));
+
+      const chatMessages = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...recent.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ];
+
       response = await streamText({
-        model: openAI.chat(modelId),
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: message },
-        ],
+        model: openAIProvider.chat(modelId),
+        messages: chatMessages,
       });
     } catch (err) {
       // If model call fails before streaming starts, propagate a 502 without sending SSE headers

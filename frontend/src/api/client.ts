@@ -50,7 +50,7 @@ export const api = {
   },
   ai: {
     stream: (
-      body: { conversationId?: string; message: string },
+      body: { conversationId?: string; message: string; provider?: 'gemini' | 'openrouter' },
       handlers: { onDelta: (text: string) => void; onDone?: (data: { conversationId?: string }) => void }
     ) => {
       const url = `${API_BASE}/ai/stream`;
@@ -105,10 +105,10 @@ export const api = {
         return true;
       });
     },
-    title: (conversationId: string) =>
+    title: (conversationId: string, provider?: 'gemini' | 'openrouter') =>
       request<{ title: string }>(`/ai/title`, {
         method: 'POST',
-        body: JSON.stringify({ conversationId }),
+        body: JSON.stringify({ conversationId, provider }),
       }),
   },
 };

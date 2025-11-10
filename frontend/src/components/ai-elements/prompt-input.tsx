@@ -764,7 +764,7 @@ export const PromptInput = ({
         onSubmit={handleSubmit}
         {...props}
       >
-        <InputGroup className={cn(groupClassName, "rounded-full")}>{children}</InputGroup>
+        <InputGroup className={cn(groupClassName)}>{children}</InputGroup>
       </form>
     </>
   );
@@ -992,7 +992,16 @@ export type PromptInputLeftAddonProps = Omit<
 >;
 
 export const PromptInputLeftAddon = ({ className, ...props }: PromptInputLeftAddonProps) => (
-  <InputGroupAddon align="inline-start" className={cn("gap-1", className)} {...props} />
+  <InputGroupAddon
+    align="inline-start"
+    className={cn(
+      "gap-1",
+      // When textarea becomes multiline, move plus to the bottom row
+      "group-has-[>textarea[data-multiline=true]]/input-group:order-last group-has-[>textarea[data-multiline=true]]/input-group:px-1 group-has-[>textarea[data-multiline=true]]/input-group:pt-1 group-has-[>textarea[data-multiline=true]]/input-group:items-end",
+      className
+    )}
+    {...props}
+  />
 );
 
 export type PromptInputFooterProps = Omit<
@@ -1009,8 +1018,8 @@ export const PromptInputFooter = ({
     className={cn(
       // Default inline with textarea
       "justify-between gap-1",
-      // When textarea becomes multiline, move footer to the next line and stretch
-      "group-has-[>textarea[data-multiline=true]]/input-group:order-last group-has-[>textarea[data-multiline=true]]/input-group:basis-full group-has-[>textarea[data-multiline=true]]/input-group:px-1 group-has-[>textarea[data-multiline=true]]/input-group:pt-1",
+      // When textarea becomes multiline, keep footer on bottom row and let it take remaining space
+      "group-has-[>textarea[data-multiline=true]]/input-group:order-last group-has-[>textarea[data-multiline=true]]/input-group:flex-1 group-has-[>textarea[data-multiline=true]]/input-group:px-1 group-has-[>textarea[data-multiline=true]]/input-group:pt-1 group-has-[>textarea[data-multiline=true]]/input-group:items-end",
       className
     )}
     {...props}

@@ -16,8 +16,10 @@ import {
   PromptInputActionAddAttachments,
 } from '@/components/ai-elements/prompt-input';
 import { useAuth } from '../context/AuthContext';
-import { PlusIcon, CopyIcon, PanelLeftIcon } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { PlusIcon, CopyIcon, PanelLeftIcon, MoreVertical, Settings } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Actions, Action } from '@/components/ai-elements/actions';
 import { useSidebar } from '@/components/ui/sidebar';
 
@@ -25,7 +27,8 @@ type Message = { _id?: string; role: 'user' | 'assistant'; content: string };
 
 export default function Chat() {
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { id: routeId } = useParams<{ id?: string }>();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -34,6 +37,11 @@ export default function Chat() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [atBottom, setAtBottom] = useState(true);
   const [atTop, setAtTop] = useState(true);
+  const [provider, setProvider] = useState<'gemini' | 'openrouter'>('gemini');
+  const [openModelDialog, setOpenModelDialog] = useState(false);
+  const [openRouterModels, setOpenRouterModels] = useState<{ id: string; name?: string }[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [selectedOpenRouterModel, setSelectedOpenRouterModel] = useState<string>('openrouter/auto');
 
   const displayName = (user?.name || user?.email || 'there').split(' ')[0].split('@')[0];
   const salutation = (() => {
@@ -44,23 +52,18 @@ export default function Chat() {
     return 'Good evening';
   })();
 
-  // React to URL param `c` for active conversation selection
+  // React to URL path `/c/:id`; if none, pick first and navigate
   useEffect(() => {
-    const id = searchParams.get('c');
+    const id = routeId || null;
     if (id && id !== activeId) {
       selectConversation(id);
     } else if (!id) {
-      // If no conversation specified, pick the first and sync URL
       (async () => {
         try {
           const { conversations } = await api.conversations.list();
           if (conversations[0]?._id) {
             const first = conversations[0]._id as string;
-            setSearchParams((sp) => {
-              const next = new URLSearchParams(sp);
-              next.set('c', first);
-              return next;
-            });
+            navigate(`/c/${first}`, { replace: true });
             await selectConversation(first);
           } else {
             setActiveId(null);
@@ -70,7 +73,47 @@ export default function Chat() {
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [routeId]);
+
+  // Load saved provider on mount and persist changes
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('aiProvider') as 'gemini' | 'openrouter' | null;
+      if (saved === 'gemini' || saved === 'openrouter') setProvider(saved);
+      const savedModel = localStorage.getItem('openrouterModel');
+      if (savedModel) setSelectedOpenRouterModel(savedModel);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem('aiProvider', provider);
+    } catch {}
+  }, [provider]);
+  useEffect(() => {
+    try {
+      if (selectedOpenRouterModel) localStorage.setItem('openrouterModel', selectedOpenRouterModel);
+    } catch {}
+  }, [selectedOpenRouterModel]);
+
+  useEffect(() => {
+    if (openModelDialog) {
+      (async () => {
+        try {
+          setModelsLoading(true);
+          const res = await fetch('https://openrouter.ai/api/v1/models');
+          const data = await res.json();
+          const list = Array.isArray(data?.data) ? data.data as any[] : [];
+          const models = list.map((m) => ({ id: m.id as string, name: (m.name as string) || (m.id as string) }));
+          setOpenRouterModels(models);
+        } catch {
+          setOpenRouterModels([]);
+        } finally {
+          setModelsLoading(false);
+        }
+      })();
+    }
+  }, [openModelDialog]);
 
   async function selectConversation(id: string) {
     setActiveId(id);
@@ -88,7 +131,7 @@ export default function Chat() {
     try {
       let finalConvId: string | undefined = convId;
       await api.ai.stream(
-        { conversationId: convId, message: userText },
+        { conversationId: convId, message: userText, provider },
         {
           onDelta: (delta: string) => {
             assistantBuffer.current += delta;
@@ -112,12 +155,15 @@ export default function Chat() {
       // Generate/update concise title and refresh sidebar list
       if (finalConvId) {
         try {
-          await api.ai.title(finalConvId);
+          await api.ai.title(finalConvId, provider);
           window.dispatchEvent(new CustomEvent('conversations:refresh'));
         } catch {}
       }
 
-      if (!activeId && finalConvId) setActiveId(finalConvId);
+      if (!activeId && finalConvId) {
+        setActiveId(finalConvId);
+        navigate(`/c/${finalConvId}`, { replace: true });
+      }
     } catch (e) {
       // noop
     } finally {
@@ -170,13 +216,70 @@ export default function Chat() {
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground" />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button aria-label="Menu" className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-input hover:bg-accent">
+                <MoreVertical className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem className="justify-between">
+                <span className="truncate">
+                  {provider === 'openrouter' ? selectedOpenRouterModel : 'Gemini'}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Model settings"
+                  className="ml-2 inline-flex items-center justify-center h-7 w-7 rounded-sm hover:bg-accent"
+                  onClick={(e) => { e.stopPropagation(); setOpenModelDialog(true); }}
+                >
+                  <Settings className="size-4" />
+                </button>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </header>
     );
   }
 
   return (
     <>
+      <Dialog open={openModelDialog} onOpenChange={setOpenModelDialog}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Select OpenRouter Model</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-80 overflow-y-auto mt-2 border rounded-md">
+            {modelsLoading ? (
+              <div className="p-4 text-sm text-muted-foreground">Loading models…</div>
+            ) : openRouterModels.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No models found.</div>
+            ) : (
+              <ul className="divide-y">
+                {openRouterModels.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-accent ${selectedOpenRouterModel === m.id ? 'bg-accent' : ''}`}
+                      onClick={() => {
+                        setSelectedOpenRouterModel(m.id);
+                        setOpenModelDialog(false);
+                        setProvider('openrouter');
+                      }}
+                      title={m.id}
+                    >
+                      <div className="font-medium truncate">{m.name || m.id}</div>
+                      <div className="text-xs text-muted-foreground truncate">{m.id}</div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <NavHeader />
       <div className="flex-1 overflow-visible">
           {messages.length === 0 ? (

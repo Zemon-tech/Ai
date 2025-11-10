@@ -58,18 +58,30 @@ export default function AppLayout() {
     return () => window.removeEventListener('conversations:refresh', handler as EventListener);
   }, []);
 
-  // Keep active item in sync with the URL param `c`
+  // Redirect legacy query param `?c=` to new path `/c/:id`
   useEffect(() => {
-    const id = new URLSearchParams(location.search).get('c');
-    if (id && id !== activeId) setActiveId(id);
-  }, [location.search]);
+    const q = new URLSearchParams(location.search).get('c');
+    if (q) {
+      navigate(`/c/${q}`, { replace: true });
+    }
+  }, [location.search, navigate]);
+
+  // Keep active item in sync with the URL path `/c/:id`
+  useEffect(() => {
+    const match = location.pathname.match(/^\/c\/([^/?#]+)/);
+    const id = match ? match[1] : null;
+    if (id && id !== activeId) {
+      setActiveId(id);
+      localStorage.setItem('activeConversationId', id);
+    }
+  }, [location.pathname]);
 
   async function newChat() {
     const res = await api.conversations.create('New Chat');
     setConversations((c) => [res.conversation, ...c]);
     localStorage.setItem('activeConversationId', res.conversation._id);
     setActiveId(res.conversation._id);
-    navigate(`/?c=${res.conversation._id}`);
+    navigate(`/c/${res.conversation._id}`);
   }
 
   async function removeChat(id: string) {
@@ -100,9 +112,9 @@ export default function AppLayout() {
   function selectConversation(id: string) {
     setActiveId(id);
     localStorage.setItem('activeConversationId', id);
-    if (location.pathname !== '/' || new URLSearchParams(location.search).get('c') !== id) {
-      navigate(`/?c=${id}`);
-    }
+    const currentMatch = location.pathname.match(/^\/c\/([^/?#]+)/);
+    const currentId = currentMatch ? currentMatch[1] : null;
+    if (currentId !== id) navigate(`/c/${id}`);
   }
 
   return (
