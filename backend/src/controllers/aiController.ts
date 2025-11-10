@@ -76,8 +76,8 @@ Return only the title.`;
 
     const { text } = await generateText({
       model: openAIProvider.chat(modelId),
+      system: system,
       messages: [
-        { role: 'system', content: system },
         { role: 'user', content: `Conversation transcript (truncated):\n\n${combined}` },
       ],
     });
@@ -156,13 +156,11 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
       const MAX_TURNS = 30;
       const recent = history.slice(Math.max(0, history.length - MAX_TURNS));
 
-      const chatMessages = [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...recent.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-      ];
+      const chatMessages = recent.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
       response = await streamText({
         model: openAIProvider.chat(modelId),
+        system: SYSTEM_PROMPT,
         messages: chatMessages,
       });
     } catch (err) {
