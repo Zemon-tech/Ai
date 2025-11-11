@@ -86,10 +86,21 @@ export default function AppLayout() {
 
   async function removeChat(id: string) {
     await api.conversations.remove(id);
-    setConversations((c) => c.filter((x) => x._id !== id));
-    if (activeId === id) {
+    const nextList = conversations.filter((x) => x._id !== id);
+    setConversations(nextList);
+    const deletedActive = activeId === id;
+    if (deletedActive) {
       setActiveId(null);
       localStorage.removeItem('activeConversationId');
+    }
+    if (deletedActive || nextList.length === 0) {
+      try {
+        const res = await api.conversations.create('New Chat');
+        setConversations([res.conversation, ...nextList]);
+        localStorage.setItem('activeConversationId', res.conversation._id);
+        setActiveId(res.conversation._id);
+        navigate(`/c/${res.conversation._id}`);
+      } catch {}
     }
   }
 
