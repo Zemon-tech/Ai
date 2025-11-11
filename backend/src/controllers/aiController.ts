@@ -9,7 +9,7 @@ import { env } from '../config/env';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenRouterClient, getOpenRouterModelId } from '../ai/openrouterProvider';
 import { streamText, generateText } from 'ai';
-import { serpSearch, serpGoogleLightSearch, serpGoogleNewsLightSearch, renderCitations, WebResult } from '../services/serpapi';
+import { serpSearch, serpGoogleLightSearch, serpGoogleNewsLightSearch, renderCitations, WebResult, fetchTopArticlesText } from '../services/serpapi';
 
 // Load system prompt from file with fallback
 const SYSTEM_PROMPT: string = (() => {
@@ -29,6 +29,23 @@ const SYSTEM_PROMPT: string = (() => {
     } catch {}
   }
   return 'You are a helpful assistant.';
+})();
+
+// Load synthesis prompt guiding long-form answer from research brief
+const WEBSYNTH_PROMPT: string = (() => {
+  const candidates = [
+    path.resolve(__dirname, '../prompts/websynthesis.md'),
+    path.resolve(process.cwd(), 'backend/src/prompts/websynthesis.md'),
+    path.resolve(process.cwd(), 'backend/dist/prompts/websynthesis.md'),
+  ];
+  for (const p of candidates) {
+    try {
+      if (existsSync(p)) {
+        return readFileSync(p, 'utf8');
+      }
+    } catch {}
+  }
+  return '';
 })();
 
 // Load web search prompt for query optimization
@@ -139,7 +156,13 @@ Return only the title.`;
 export async function streamAIResponse(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const userId = req.user!.userId;
-    const { conversationId, message, webSearch } = req.body as { conversationId?: string; message: string; webSearch?: boolean };
+    const { conversationId, message, webSearch, provider: bodyProvider, web } = req.body as {
+      conversationId?: string;
+      message: string;
+      webSearch?: boolean;
+      provider?: 'gemini' | 'openrouter';
+      web?: { gl?: string; hl?: string; location?: string; num?: number; maxSources?: number };
+    };
     if (!message) throw createError(400, 'Message is required');
 
     let convId = conversationId;
@@ -156,10 +179,10 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
     await MessageModel.create({ conversationId: convId, userId, role: 'user', content: message });
 
     // Select provider (Gemini default) or OpenRouter via OpenAI-compatible SDK
-    const provider = (req.body as any)?.provider as 'gemini' | 'openrouter' | undefined || env.AI_PROVIDER;
+    const providerName = (bodyProvider as 'gemini' | 'openrouter' | undefined) || env.AI_PROVIDER;
     let modelId: string;
     let openAIProvider: ReturnType<typeof createOpenAI>;
-    if (provider === 'openrouter') {
+    if (providerName === 'openrouter') {
       openAIProvider = createOpenRouterClient();
       modelId = getOpenRouterModelId();
     } else {
@@ -196,7 +219,14 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
       const chatMessages = kept;
 
       const extra: any = {};
-      if (provider === 'openrouter') {
+      // Ensure SSE headers are set before any status writes
+      if (!res.headersSent) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders?.();
+      }
+      if (providerName === 'openrouter') {
         // Help OpenRouter attribute per-conversation usage and enable transform to retain salient history
         extra.user = `${userId}:${convId}`; // stable user+conversation key
         extra.transforms = ['middle-out'];
@@ -206,6 +236,8 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
       let augmentedSystem = SYSTEM_PROMPT;
       if (webSearch && env.SERPAPI_KEY) {
         try {
+          // status: planning
+          try { res.write(`data: ${JSON.stringify({ type: 'status', phase: 'planning' })}\n\n`); } catch {}
           // Plan multiple targeted queries
           const { text: planText } = await generateText({
             model: openAIProvider.chat(modelId),
@@ -230,15 +262,26 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
           if (planned.length === 0) planned = [{ query: message.slice(0, 300) }];
 
           // Intent: detect news vs general
-          const intentIsNews = /\b(news|latest|today|this week|breaking|headline|update|updates)\b/i.test(message);
+          const intentIsNews = /\b(news|latest|today|this week|breaking|headline|update|updates|trending|trend)\b/i.test(message);
+          // Recency bias for news queries
+          const wantsToday = /\b(today|now|latest)\b/i.test(message);
+          const tbs = intentIsNews ? (wantsToday ? 'qdr:d' : 'qdr:w') : undefined; // day or week
 
+          // Locale options
+          const gl = (web?.gl || '').toLowerCase() || 'us';
+          const hl = (web?.hl || '').toLowerCase() || 'en';
+          const location = web?.location;
+          const num = Math.max(5, Math.min(web?.num ?? 10, 20));
+
+          // status: searching
+          try { res.write(`data: ${JSON.stringify({ type: 'status', phase: 'searching' })}\n\n`); } catch {}
           // Execute multiple web searches and aggregate results
           const all: WebResult[] = [];
           for (const p of planned.slice(0, 6)) {
             try {
               const batch = intentIsNews
-                ? await serpGoogleNewsLightSearch(p.query, { num: 10 })
-                : await serpGoogleLightSearch(p.query, { num: 10 });
+                ? await serpGoogleNewsLightSearch(p.query, { num, gl, hl, tbs, location })
+                : await serpGoogleLightSearch(p.query, { num, gl, hl, tbs, location });
               all.push(...batch);
             } catch {}
           }
@@ -259,8 +302,9 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
             } catch {}
           }
 
-          // Save results for SSE so UI can render source icons
-          const top = deduped.slice(0, 12);
+          // Save results for SSE (will be sent at end of stream)
+          const maxSources = Math.max(4, Math.min(web?.maxSources ?? 12, 20));
+          const top = deduped.slice(0, maxSources);
           webResults = top.map((r, i) => ({
             id: i + 1,
             title: r.title,
@@ -280,49 +324,46 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
             })(),
           }));
 
-          // Build a concise research brief to ground the model
+          // status: fetching (article content)
+          try { res.write(`data: ${JSON.stringify({ type: 'status', phase: 'fetching' })}\n\n`); } catch {}
+          // Fetch main content from top articles to reduce shallow synthesis
+          let articleTexts: (string | null)[] = [];
+          try {
+            const urls = top.map((r) => r.link);
+            articleTexts = await fetchTopArticlesText(urls, Math.min(6, urls.length));
+          } catch {}
+
+          // Build a concise research brief to ground the model using extracted texts where available
           try {
             const briefLines = top.slice(0, 8).map((r, i) => {
               const src = r.source || (() => { try { return new URL(r.link).hostname; } catch { return r.link; } })();
               const date = r.date ? ` [${r.date}]` : '';
-              const snip = (r.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 220);
-              return `(${i + 1}) ${r.title} — ${src}${date}\n${snip}`.trim();
+              const extracted = (articleTexts[i] || '').replace(/\s+/g, ' ').trim();
+              const basis = (extracted && extracted.length > 120) ? extracted.slice(0, 600) : ((r.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 300));
+              return `(${i + 1}) ${r.title} — ${src}${date}\n${basis}`.trim();
             }).join('\n\n');
-            researchBrief = `Web research findings for the user's request. Use ONLY these as factual grounding. Cite inline with (source #) when appropriate.\n\n${briefLines}`;
+            researchBrief = `Web research findings for the user's request. Use ONLY these as factual grounding. Cite inline with (n) referencing the numbered sources where appropriate.\n\n${briefLines}`;
           } catch {}
 
-          // Create a short findings summary to show before the full answer (for UI)
-          try {
-            const numbered = top
-              .slice(0, 12)
-              .map((r, i) => `(${i + 1}) ${r.title} — ${r.source || r.link}${r.date ? ` [${r.date}]` : ''}${r.snippet ? `\nSnippet: ${r.snippet}` : ''}`)
-              .join('\n\n');
-            const { text: summary } = await generateText({
-              model: openAIProvider.chat(modelId),
-              system: `You write ultra-concise bullet summaries (3-6 points) strictly from the findings below.
-Rules:
-- Short, factual bullets. Neutral tone.
-- No links, usernames, social handles, or site names in-line.
-- No bracketed citations or numbers.
-- Prefer consensus across multiple sources; if conflict, note it briefly.
-- If evidence is insufficient for a point, omit it.
-- No intro/outro.`,
-              messages: [
-                { role: 'user', content: `Summarize the key findings for the user's query:\n\n${message}\n\nSources:\n${numbered}` },
-              ],
-            });
-            webSummary = (summary || '').trim();
-          } catch {}
+          // status: summarizing (preparing findings for final answer)
+          try { res.write(`data: ${JSON.stringify({ type: 'status', phase: 'summarizing' })}\n\n`); } catch {}
         } catch {}
       }
 
       // Assemble model call with optional research brief as a system preface
       const systemParts = [SYSTEM_PROMPT];
+      if (WEBSYNTH_PROMPT) {
+        systemParts.push('\n\n' + WEBSYNTH_PROMPT);
+      }
       if (researchBrief) {
         systemParts.push('\n\n' + researchBrief);
       }
+      // Style rules: no citations or references; paragraph-focused, structured analysis
+      systemParts.push(`\n\nOutput Style Rules:\n- Do NOT include citations or numeric markers; the application displays sources separately.\n- Do NOT include a References or Sources section.\n- Begin with a brief summary, then provide well-structured short paragraphs with clear section headings.\n- Keep tone neutral, factual, and precise; state uncertainty briefly where evidence is insufficient.`);
       const finalSystem = systemParts.join('');
 
+      // status: answering
+      try { res.write(`data: ${JSON.stringify({ type: 'status', phase: 'answering' })}\n\n`); } catch {}
       response = await streamText({
         model: openAIProvider.chat(modelId),
         system: finalSystem,
@@ -330,25 +371,17 @@ Rules:
         ...extra,
       });
     } catch (err) {
-      // If model call fails before streaming starts, propagate a 502 without sending SSE headers
+      // If model call fails: if headers already sent, send SSE error and end; otherwise delegate to error handler
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: (err as Error).message })}\n\n`);
+        res.end();
+        return;
+      }
       return next(createError(502, (err as Error).message));
     }
 
-    // Set SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders?.();
-
     let assistantText = '';
     try {
-      // Send sources to client before text stream starts
-      if (webResults && webResults.length) {
-        res.write(`data: ${JSON.stringify({ type: 'sources', sources: webResults })}\n\n`);
-      }
-      if (webSummary) {
-        res.write(`data: ${JSON.stringify({ type: 'webSummary', summary: webSummary })}\n\n`);
-      }
       for await (const delta of response.textStream) {
         assistantText += delta;
         res.write(`data: ${JSON.stringify({ type: 'delta', delta })}\n\n`);
@@ -373,6 +406,15 @@ Rules:
       });
     }
 
+    // Emit sources and summary at end so UI shows pills after streaming
+    if (webResults && webResults.length) {
+      res.write(`data: ${JSON.stringify({ type: 'sources', sources: webResults })}\n\n`);
+    }
+    if (webSummary) {
+      res.write(`data: ${JSON.stringify({ type: 'webSummary', summary: webSummary })}\n\n`);
+    }
+    // status: complete
+    try { res.write(`data: ${JSON.stringify({ type: 'status', phase: 'complete' })}\n\n`); } catch {}
     // Notify completion and conversationId for newly created chats
     res.write(`data: ${JSON.stringify({ type: 'done', conversationId: convId })}\n\n`);
     res.end();

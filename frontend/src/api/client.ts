@@ -50,12 +50,13 @@ export const api = {
   },
   ai: {
     stream: (
-      body: { conversationId?: string; message: string; provider?: 'gemini' | 'openrouter'; webSearch?: boolean },
+      body: { conversationId?: string; message: string; provider?: 'gemini' | 'openrouter'; webSearch?: boolean; web?: { gl?: string; hl?: string; location?: string; num?: number; maxSources?: number } },
       handlers: {
         onDelta: (text: string) => void;
         onDone?: (data: { conversationId?: string }) => void;
         onSources?: (sources: { id: number; title: string; link: string; source?: string; favicon?: string; date?: string; snippet?: string }[]) => void;
         onWebSummary?: (summary: string) => void;
+        onStatus?: (phase: 'planning' | 'searching' | 'fetching' | 'summarizing' | 'answering' | 'complete') => void;
       }
     ) => {
       const url = `${API_BASE}/ai/stream`;
@@ -104,6 +105,7 @@ export const api = {
                 if (evt.type === 'delta') handlers.onDelta(evt.delta as string);
                 if (evt.type === 'sources' && Array.isArray(evt.sources)) handlers.onSources?.(evt.sources);
                 if (evt.type === 'webSummary' && typeof evt.summary === 'string') handlers.onWebSummary?.(evt.summary);
+                if (evt.type === 'status' && typeof evt.phase === 'string') handlers.onStatus?.(evt.phase);
                 if (evt.type === 'done') handlers.onDone?.({ conversationId: evt.conversationId as string });
               } catch {}
             }
@@ -112,11 +114,21 @@ export const api = {
         return true;
       });
     },
-    title: (conversationId: string, provider?: 'gemini' | 'openrouter') =>
-      request<{ title: string }>(`/ai/title`, {
-        method: 'POST',
-        body: JSON.stringify({ conversationId, provider }),
-      }),
+    title: async (conversationId: string, provider?: 'gemini' | 'openrouter') => {
+      const path = `/ai/title`;
+      const options: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ conversationId, provider }) };
+      let res = await fetch(`${API_BASE}${path}`, options);
+      if (res.status === 401) {
+        try { await api.auth.refresh(); } catch { throw new Error('Unauthorized'); }
+        res = await fetch(`${API_BASE}${path}`, options);
+      }
+      if (!res.ok) {
+        let message = 'Request failed';
+        try { const data = await res.json(); message = data.error || message; } catch {}
+        throw new Error(message);
+      }
+      return res.json() as Promise<{ title: string }>;
+    },
   },
 };
 

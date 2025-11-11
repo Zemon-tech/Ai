@@ -44,6 +44,7 @@ export default function Chat() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [phase, setPhase] = useState<'planning' | 'searching' | 'fetching' | 'summarizing' | 'answering' | 'complete' | null>(null);
   const assistantBuffer = useRef('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -145,13 +146,19 @@ export default function Chat() {
     if (!userText.trim() || streaming) return;
     setMessages((m) => [...m, { role: 'user', content: userText }]);
     setStreaming(true);
+    setPhase(null);
     assistantBuffer.current = '';
     setAutoScroll(true);
     let convId = activeId || undefined;
     try {
       let finalConvId: string | undefined = convId;
+      // Build locale-aware web options
+      const lang = (typeof navigator !== 'undefined' ? navigator.language : 'en-US') || 'en-US';
+      const [hlPart, glPart] = lang.split('-');
+      const hl = (hlPart || 'en').toLowerCase();
+      const gl = (glPart || 'US').toLowerCase();
       await api.ai.stream(
-        { conversationId: convId, message: userText, provider, webSearch },
+        { conversationId: convId, message: userText, provider, webSearch, web: webSearch ? { hl, gl } : undefined },
         {
           onDelta: (delta: string) => {
             assistantBuffer.current += delta;
@@ -162,6 +169,9 @@ export default function Chat() {
               }
               return [...m, { role: 'assistant', content: assistantBuffer.current }];
             });
+          },
+          onStatus: (p) => {
+            setPhase(p);
           },
           onSources: (sources) => {
             setMessages((m) => {
@@ -183,6 +193,7 @@ export default function Chat() {
           },
           onDone: ({ conversationId }) => {
             if (conversationId) finalConvId = conversationId;
+            setPhase('complete');
           },
         }
       );
@@ -206,6 +217,7 @@ export default function Chat() {
       // noop
     } finally {
       setStreaming(false);
+      setTimeout(() => setPhase(null), 500);
     }
   }
 
@@ -462,9 +474,26 @@ export default function Chat() {
                   </Message>
                 )
               ))}
-              {streaming && !assistantBuffer.current && (
+              {streaming && (
                 <div className="w-full">
-                  <Shimmer className="text-base">Thinking…</Shimmer>
+                  <Shimmer className="text-base">
+                    {(() => {
+                      switch (phase) {
+                        case 'planning':
+                          return 'Planning searches…';
+                        case 'searching':
+                          return 'Searching the web…';
+                        case 'fetching':
+                          return 'Fetching articles…';
+                        case 'summarizing':
+                          return 'Summarizing findings…';
+                        case 'answering':
+                          return assistantBuffer.current ? 'Answering…' : 'Preparing answer…';
+                        default:
+                          return assistantBuffer.current ? 'Answering…' : 'Thinking…';
+                      }
+                    })()}
+                  </Shimmer>
                 </div>
               )}
               <div ref={bottomRef} />
