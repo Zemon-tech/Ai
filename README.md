@@ -6,6 +6,43 @@ Clean, fast, and secure AI chat backend + frontend. Streamed AI answers, optiona
 
 </div>
 
+## UI Preview
+
+<div align="center">
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/images/auth.png" alt="Auth Page" width="360" />
+      <div><b>Auth</b></div>
+    </td>
+    <td align="center">
+      <img src="docs/images/app-1.png" alt="Main App - View 1" width="360" />
+      <div><b>Main App (1)</b></div>
+    </td>
+    <td align="center">
+      <img src="docs/images/app-2.png" alt="Main App - View 2" width="360" />
+      <div><b>Main App (2)</b></div>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/images/sidebar.png" alt="Sidebar" width="360" />
+      <div><b>Sidebar</b></div>
+    </td>
+    <td align="center">
+      <img src="docs/images/model-selector.png" alt="Model Selector" width="360" />
+      <div><b>Model Selector</b></div>
+    </td>
+    <td align="center">
+      <img src="docs/images/settings.png" alt="Settings" width="360" />
+      <div><b>Settings</b></div>
+    </td>
+  </tr>
+</table>
+
+</div>
+
 ## Why this project
 
 - Build production-ready AI chat with security, speed, and clean architecture.
