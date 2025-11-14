@@ -123,6 +123,8 @@ Return only the title.`;
         ],
         // Very small cap for title generation
         maxOutputTokens: 24,
+        // Force plain text; disable tools/function-calling
+        toolChoice: 'none',
       });
       title = (text || '').trim();
     } catch (err) {
@@ -256,6 +258,7 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
               { role: 'user', content: message },
             ],
             maxOutputTokens: 256,
+            toolChoice: 'none',
           });
           let planned: { query: string }[] = [];
           try {
@@ -268,6 +271,7 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
               system: WEBSEARCH_PROMPT,
               messages: [{ role: 'user', content: message }],
               maxOutputTokens: 64,
+              toolChoice: 'none',
             });
             planned = [{ query: (query || message).trim().slice(0, 300) }];
           }
@@ -423,6 +427,7 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
           messages: chatMessages,
           // Smaller cap for OpenRouter to reduce credit usage
           maxOutputTokens: initialMax,
+          toolChoice: 'none',
           ...extra,
         });
       } catch (e: any) {
@@ -435,6 +440,7 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
             system: finalSystem,
             messages: shorter,
             maxOutputTokens: 64,
+            toolChoice: 'none',
             ...extra,
           });
         } else {
@@ -453,10 +459,23 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
 
     let assistantText = '';
     try {
+      // Maintain a raw buffer and a sanitized buffer to emit only cleaned deltas
+      let rawBuffer = '';
+      let cleanBuffer = '';
+      const sanitize = (input: string) =>
+        input
+          .replace(/```\s*tool_code[\s\S]*?```/gi, '')
+          .replace(/\n{3,}/g, '\n\n');
       for await (const delta of response.textStream) {
-        assistantText += delta;
-        res.write(`data: ${JSON.stringify({ type: 'delta', delta })}\n\n`);
+        rawBuffer += delta;
+        const cleaned = sanitize(rawBuffer);
+        const outgoing = cleaned.slice(cleanBuffer.length);
+        if (outgoing) {
+          res.write(`data: ${JSON.stringify({ type: 'delta', delta: outgoing })}\n\n`);
+        }
+        cleanBuffer = cleaned;
       }
+      assistantText = cleanBuffer;
     } catch (err) {
       // End SSE stream gracefully on error to avoid double-send
       res.write(`data: ${JSON.stringify({ type: 'error', message: (err as Error).message })}\n\n`);

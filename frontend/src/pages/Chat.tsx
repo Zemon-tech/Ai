@@ -35,6 +35,14 @@ import { Actions, Action } from '@/components/ai-elements/actions';
 import { Task, TaskContent, TaskItem, TaskTrigger } from '@/components/ai-elements/task';
 import { useSidebar } from '@/components/ui/sidebar';
 
+// Remove model-internal tool code blocks like ```tool_code ... ``` while preserving normal code
+function sanitizeAssistantText(input: string): string {
+  if (!input) return input;
+  // Remove any fenced code blocks whose language tag is tool_code (case-insensitive)
+  // This handles partial/incomplete fences by applying on the whole buffer each tick
+  return input.replace(/```\s*tool_code[\s\S]*?```/gi, '').replace(/\n{3,}/g, '\n\n');
+}
+
 type WebSource = { id: number; title: string; link: string; source?: string; favicon?: string; date?: string; snippet?: string };
 type Message = { _id?: string; role: 'user' | 'assistant'; content: string; sources?: WebSource[]; webSummary?: string };
 
@@ -182,12 +190,13 @@ export default function Chat() {
         {
           onDelta: (delta: string) => {
             assistantBuffer.current += delta;
+            const sanitized = sanitizeAssistantText(assistantBuffer.current);
             setMessages((m) => {
               const last = m[m.length - 1];
               if (last && last.role === 'assistant') {
-                return [...m.slice(0, -1), { ...last, content: assistantBuffer.current }];
+                return [...m.slice(0, -1), { ...last, content: sanitized }];
               }
-              return [...m, { role: 'assistant', content: assistantBuffer.current }];
+              return [...m, { role: 'assistant', content: sanitized }];
             });
           },
           onStatus: (p) => {
@@ -499,9 +508,13 @@ export default function Chat() {
                         </Task>
                       </div>
                     )}
-                    <AIResponse className="prose dark:prose-invert max-w-none">
-                      {m.content}
-                    </AIResponse>
+                    <Message from="assistant">
+                      <MessageContent variant="flat">
+                        <AIResponse className="prose dark:prose-invert max-w-none">
+                          {m.content}
+                        </AIResponse>
+                      </MessageContent>
+                    </Message>
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center gap-2">
                         {Array.isArray(m.sources) && m.sources.length > 0 && (

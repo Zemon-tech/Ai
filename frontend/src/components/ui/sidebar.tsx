@@ -768,6 +768,16 @@ function SidebarUserButton({ email, name, avatarUrl, onLogout }: SidebarUserButt
   const [accent, setAccent] = React.useState<string>(() =>
     localStorage.getItem('accent') || '' // empty = neutral, no accent
   )
+  // Content text scale (affects markdown and other content areas using CSS var)
+  const [contentScale, setContentScale] = React.useState<number>(() => {
+    const saved = localStorage.getItem('contentScale')
+    const num = saved ? parseFloat(saved) : 1
+    return Number.isFinite(num) ? Math.min(1.5, Math.max(0.8, num)) : 1
+  })
+  const [contentPreset, setContentPreset] = React.useState<"small" | "normal" | "large" | "xl" | "custom">(() => {
+    const saved = localStorage.getItem('contentPreset') as any
+    return saved || 'normal'
+  })
 
   // Apply theme
   const applyTheme = React.useCallback((t: 'system' | 'light' | 'dark') => {
@@ -807,6 +817,37 @@ function SidebarUserButton({ email, name, avatarUrl, onLogout }: SidebarUserButt
     }
     localStorage.setItem('accent', accent)
   }, [accent])
+
+  // Apply content scale to :root CSS variable
+  React.useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--content-scale', String(contentScale))
+    localStorage.setItem('contentScale', String(contentScale))
+    localStorage.setItem('contentPreset', contentPreset)
+
+    // Determine weight profile by preset or inferred from scale
+    type Weights = { h1: number; h2: number; h3: number; h4: number; body: number }
+    const presets: Record<string, Weights> = {
+      small: { h1: 600, h2: 500, h3: 500, h4: 500, body: 400 },
+      normal: { h1: 700, h2: 600, h3: 500, h4: 500, body: 400 },
+      large: { h1: 800, h2: 700, h3: 600, h4: 500, body: 500 },
+      xl: { h1: 900, h2: 800, h3: 700, h4: 600, body: 500 },
+    }
+    let key = contentPreset
+    if (key === 'custom') {
+      // Infer from scale when custom
+      if (contentScale < 0.95) key = 'small'
+      else if (contentScale < 1.1) key = 'normal'
+      else if (contentScale < 1.25) key = 'large'
+      else key = 'xl'
+    }
+    const w = presets[key] || presets.normal
+    root.style.setProperty('--fw-h1', String(w.h1))
+    root.style.setProperty('--fw-h2', String(w.h2))
+    root.style.setProperty('--fw-h3', String(w.h3))
+    root.style.setProperty('--fw-h4', String(w.h4))
+    root.style.setProperty('--fw-body', String(w.body))
+  }, [contentScale, contentPreset])
 
   return (
     <div className="mt-auto p-2">
@@ -892,7 +933,50 @@ function SidebarUserButton({ email, name, avatarUrl, onLogout }: SidebarUserButt
                   ))}
                 </div>
               </section>
-              
+              <section className="space-y-2">
+                <div className="text-sm font-medium">Text size</div>
+                <div className="text-xs text-muted-foreground">Adjust content typography scale. Presets or fine-tune.</div>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { key: 'small', label: 'Small', value: 0.9 },
+                    { key: 'normal', label: 'Normal', value: 1.0 },
+                    { key: 'large', label: 'Large', value: 1.15 },
+                    { key: 'xl', label: 'XL', value: 1.3 },
+                  ] as const).map(({ key, label, value }) => (
+                    <button
+                      key={key}
+                      aria-pressed={contentPreset===key}
+                      onClick={() => {
+                        setContentPreset(key)
+                        setContentScale(value)
+                      }}
+                      className={cn(
+                        'px-3 py-1.5 rounded-md border text-sm',
+                        contentPreset===key ? 'bg-muted text-foreground border-input' : ''
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3 pt-1">
+                  <input
+                    type="range"
+                    min={0.8}
+                    max={1.5}
+                    step={0.05}
+                    value={contentScale}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      setContentScale(v)
+                      setContentPreset('custom')
+                    }}
+                    className="w-full"
+                    aria-label="Text size"
+                  />
+                  <div className="text-xs tabular-nums w-12 text-right">{contentScale.toFixed(2)}x</div>
+                </div>
+              </section>
             </div>
           </div>
         </DialogContent>
