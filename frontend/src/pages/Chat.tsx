@@ -18,7 +18,7 @@ import {
   PromptInputActiveModeWebsearch,
 } from '@/components/ai-elements/prompt-input';
 import { useAuth } from '../context/AuthContext';
-import { PlusIcon, CopyIcon, PanelLeftIcon, MoreVertical, Settings } from 'lucide-react';
+import { PlusIcon, CopyIcon, PanelLeftIcon, MoreVertical, Settings, PaperclipIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -45,7 +45,8 @@ function sanitizeAssistantText(input: string): string {
 }
 
 type WebSource = { id: number; title: string; link: string; source?: string; favicon?: string; date?: string; snippet?: string };
-type Message = { _id?: string; role: 'user' | 'assistant'; content: string; sources?: WebSource[]; webSummary?: string };
+type Attachment = { url: string; mediaType?: string; filename?: string };
+type Message = { _id?: string; role: 'user' | 'assistant'; content: string; attachments?: Attachment[]; sources?: WebSource[]; webSummary?: string };
 
 export default function Chat() {
   const { user } = useAuth();
@@ -162,20 +163,32 @@ export default function Chat() {
     setMessages(messages as any);
   }
 
-  async function onSend(userText: string, images?: { url: string; mediaType?: string; filename?: string }[]) {
+  async function onSend(userText: string, files?: Attachment[]) {
     if (!userText.trim() || streaming) return;
-    setMessages((m) => [...m, { role: 'user', content: userText }]);
+    setMessages((m) => [...m, { role: 'user', content: userText, attachments: files && files.length ? files : undefined }]);
     setStreaming(true);
     setPhase(null);
     assistantBuffer.current = '';
     setAutoScroll(true);
     let convId = activeId || undefined;
     try {
-      // If images provided, call image analysis endpoint and bypass chat streaming
-      if (images && images.length > 0) {
+      // If image attachments provided, call image analysis endpoint and then reload conversation
+      const imageFiles = (files || []).filter((f) => (f.mediaType || '').startsWith('image/'));
+      if (imageFiles.length > 0) {
         try {
-          const { text } = await api.ai.analyzeImage({ prompt: userText, images });
-          setMessages((m) => [...m, { role: 'assistant', content: text }]);
+          const { text, conversationId: newId } = await api.ai.analyzeImage({ prompt: userText, images: imageFiles, conversationId: activeId || undefined });
+          const cid = newId || activeId || undefined;
+          if (cid) {
+            await selectConversation(cid);
+            if (!activeId && cid) navigate(`/c/${cid}`, { replace: true });
+            // Generate/update concise title and refresh sidebar list (mirror streaming behavior)
+            try {
+              await api.ai.title(cid, provider);
+              window.dispatchEvent(new CustomEvent('conversations:refresh'));
+            } catch {}
+          } else {
+            setMessages((m) => [...m, { role: 'assistant', content: text }]);
+          }
         } finally {
           setStreaming(false);
           setTimeout(() => setPhase(null), 500);
@@ -189,7 +202,7 @@ export default function Chat() {
       const hl = (hlPart || 'en').toLowerCase();
       const gl = (glPart || 'US').toLowerCase();
       await api.ai.stream(
-        { conversationId: convId, message: userText, provider, webSearch, web: webSearch ? { hl, gl } : undefined },
+        { conversationId: convId, message: userText, attachments: files, provider, webSearch, web: webSearch ? { hl, gl } : undefined },
         {
           onDelta: (delta: string) => {
             assistantBuffer.current += delta;
@@ -445,8 +458,8 @@ export default function Chat() {
                 <PromptInput
                   onSubmit={async ({ text, files }) => {
                     if (!text) return;
-                    const images = (files || []).map((f) => ({ url: f.url, mediaType: (f as any).mediaType, filename: (f as any).filename }));
-                    await onSend(text, images.length ? images : undefined);
+                    const atts = (files || []).map((f) => ({ url: f.url, mediaType: (f as any).mediaType, filename: (f as any).filename }));
+                    await onSend(text, atts.length ? atts : undefined);
                   }}
                   groupClassName={`${webSearch ? 'rounded-md' : 'rounded-3xl'} bg-card px-3 py-2 border border-input shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-input`}
                 >
@@ -509,6 +522,29 @@ export default function Chat() {
                             </TaskItem>
                           </TaskContent>
                         </Task>
+                      </div>
+                    )}
+                    {Array.isArray(m.attachments) && m.attachments.length > 0 && (
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        {m.attachments.map((a, i) => {
+                          const isImage = (a.mediaType || '').startsWith('image/') && a.url;
+                          const isVideo = (a.mediaType || '').startsWith('video/') && a.url;
+                          if (isImage) {
+                            return (
+                              <img key={i} src={a.url} alt={a.filename || 'attachment'} className="h-28 w-28 object-cover rounded-xl border" />
+                            );
+                          }
+                          if (isVideo) {
+                            return (
+                              <video key={i} src={a.url} controls className="h-28 w-40 rounded-xl border object-cover" />
+                            );
+                          }
+                          return (
+                            <a key={i} href={a.url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center h-28 w-28 rounded-xl border bg-muted text-muted-foreground">
+                              <PaperclipIcon className="size-5" />
+                            </a>
+                          );
+                        })}
                       </div>
                     )}
                     <Message from="assistant">
@@ -575,9 +611,34 @@ export default function Chat() {
                     </div>
                   </div>
                 ) : (
-                  <Message key={idx} from={m.role}>
-                    <MessageContent>{m.content}</MessageContent>
-                  </Message>
+                  <div key={idx} className="w-full">
+                    {Array.isArray(m.attachments) && m.attachments.length > 0 && (
+                      <div className="mb-2 flex flex-wrap gap-2 justify-end">
+                        {m.attachments.map((a, i) => {
+                          const isImage = (a.mediaType || '').startsWith('image/') && a.url;
+                          const isVideo = (a.mediaType || '').startsWith('video/') && a.url;
+                          if (isImage) {
+                            return (
+                              <img key={i} src={a.url} alt={a.filename || 'attachment'} className="h-28 w-28 object-cover rounded-xl border" />
+                            );
+                          }
+                          if (isVideo) {
+                            return (
+                              <video key={i} src={a.url} controls className="h-28 w-40 rounded-xl border object-cover" />
+                            );
+                          }
+                          return (
+                            <a key={i} href={a.url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center h-28 w-28 rounded-xl border bg-muted text-muted-foreground">
+                              <PaperclipIcon className="size-5" />
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <Message from={m.role}>
+                      <MessageContent>{m.content}</MessageContent>
+                    </Message>
+                  </div>
                 )
               ))}
               {streaming && (
@@ -628,8 +689,8 @@ export default function Chat() {
               <PromptInput
                 onSubmit={async ({ text, files }) => {
                   if (!text) return;
-                  const images = (files || []).map((f) => ({ url: f.url, mediaType: (f as any).mediaType, filename: (f as any).filename }));
-                  await onSend(text, images.length ? images : undefined);
+                  const atts = (files || []).map((f) => ({ url: f.url, mediaType: (f as any).mediaType, filename: (f as any).filename }));
+                  await onSend(text, atts.length ? atts : undefined);
                 }}
                 groupClassName={`${webSearch ? 'rounded-md' : 'rounded-3xl'} bg-card px-3 py-2 border border-input shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-input`}
               >

@@ -6,6 +6,16 @@ const MessageSchema = new Schema(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     role: { type: String, enum: ['user', 'assistant'], required: true },
     content: { type: String, required: true },
+    attachments: [
+      new Schema(
+        {
+          url: { type: String },
+          mediaType: { type: String },
+          filename: { type: String },
+        },
+        { _id: false }
+      ),
+    ],
     // Optional: persisted web research artifacts attached to assistant messages
     sources: [
       new Schema(

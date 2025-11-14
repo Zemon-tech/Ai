@@ -164,12 +164,13 @@ Return only the title.`;
 export async function streamAIResponse(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const userId = req.user!.userId;
-    const { conversationId, message, webSearch, provider: bodyProvider, web } = req.body as {
+    const { conversationId, message, webSearch, provider: bodyProvider, web, attachments } = req.body as {
       conversationId?: string;
       message: string;
       webSearch?: boolean;
       provider?: 'gemini' | 'openrouter';
       web?: { gl?: string; hl?: string; location?: string; num?: number; maxSources?: number };
+      attachments?: { url: string; mediaType?: string; filename?: string }[];
     };
     if (!message) throw createError(400, 'Message is required');
 
@@ -183,8 +184,8 @@ export async function streamAIResponse(req: AuthenticatedRequest, res: Response,
       convId = conv._id.toString();
     }
 
-    // Save user message
-    await MessageModel.create({ conversationId: convId, userId, role: 'user', content: message });
+    // Save user message (with optional attachments)
+    await MessageModel.create({ conversationId: convId, userId, role: 'user', content: message, attachments: Array.isArray(attachments) ? attachments : undefined });
 
     // Select provider (Gemini default) or OpenRouter via OpenAI-compatible SDK
     const providerName = (bodyProvider as 'gemini' | 'openrouter' | 'groq' | undefined) || env.AI_PROVIDER;

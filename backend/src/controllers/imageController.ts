@@ -1,6 +1,8 @@
 import { Response, NextFunction } from 'express';
 import createError from 'http-errors';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { ConversationModel } from '../models/Conversation';
+import { MessageModel } from '../models/Message';
 import { env } from '../config/env';
 import { uploadImageFromBuffer } from '../services/supabase';
 
@@ -19,7 +21,7 @@ export async function analyzeImage(req: AuthenticatedRequest, res: Response, nex
   try {
     if (!env.GEMINI_API_KEY) throw createError(500, 'GEMINI_API_KEY not configured');
     const userId = req.user!.userId;
-    const { prompt, images } = req.body as { prompt?: string; images?: { url: string; mediaType?: string; filename?: string }[] };
+    const { prompt, images, conversationId } = req.body as { prompt?: string; images?: { url: string; mediaType?: string; filename?: string }[]; conversationId?: string };
     if (!prompt || !Array.isArray(images) || images.length === 0) {
       throw createError(400, 'prompt and images[] are required');
     }
@@ -95,7 +97,22 @@ export async function analyzeImage(req: AuthenticatedRequest, res: Response, nex
       }
     } catch {}
 
-    res.json({ text, images: publicUrls });
+    // Persist conversation and messages
+    let convId = conversationId;
+    if (convId) {
+      const conv = await ConversationModel.findOne({ _id: convId, userId }).lean();
+      if (!conv) throw createError(404, 'Conversation not found');
+    } else {
+      const title = prompt.length > 60 ? prompt.slice(0, 60) + '…' : prompt;
+      const conv = await ConversationModel.create({ userId, title: title || 'New Chat' });
+      convId = conv._id.toString();
+    }
+
+    const attachments = images.map((img, i) => ({ url: publicUrls[i] || img.url, mediaType: img.mediaType, filename: img.filename }));
+    await MessageModel.create({ conversationId: convId, userId, role: 'user', content: prompt, attachments });
+    await MessageModel.create({ conversationId: convId, userId, role: 'assistant', content: text || '' });
+
+    res.json({ text, images: publicUrls, conversationId: convId });
   } catch (err) {
     next(err);
   }

@@ -50,7 +50,7 @@ export const api = {
   },
   ai: {
     stream: (
-      body: { conversationId?: string; message: string; provider?: 'gemini' | 'openrouter' | 'groq'; webSearch?: boolean; web?: { gl?: string; hl?: string; location?: string; num?: number; maxSources?: number } },
+      body: { conversationId?: string; message: string; attachments?: { url: string; mediaType?: string; filename?: string }[]; provider?: 'gemini' | 'openrouter' | 'groq'; webSearch?: boolean; web?: { gl?: string; hl?: string; location?: string; num?: number; maxSources?: number } },
       handlers: {
         onDelta: (text: string) => void;
         onDone?: (data: { conversationId?: string }) => void;
@@ -131,7 +131,7 @@ export const api = {
     },
     modelsOpenRouter: () => request<{ models: { id: string; name?: string }[] }>(`/ai/models/openrouter`),
     modelsGroq: () => request<{ models: { id: string; name?: string }[] }>(`/ai/models/groq`),
-    analyzeImage: async (body: { prompt: string; images: { url: string; mediaType?: string; filename?: string }[] }) => {
+    analyzeImage: async (body: { prompt: string; images: { url: string; mediaType?: string; filename?: string }[]; conversationId?: string }) => {
       const path = `/ai/image/analyze`;
       const options: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) };
       let res = await fetch(`${API_BASE}${path}`, options);
@@ -144,7 +144,7 @@ export const api = {
         try { const data = await res.json(); message = data.error || message; } catch {}
         throw new Error(message);
       }
-      return res.json() as Promise<{ text: string; images: string[] }>;
+      return res.json() as Promise<{ text: string; images: string[]; conversationId?: string }>;
     },
   },
 };
