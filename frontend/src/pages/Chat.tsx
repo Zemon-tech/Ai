@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { PlusIcon, CopyIcon, PanelLeftIcon, MoreVertical, Settings } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   ModelSelector,
   ModelSelectorContent,
@@ -66,6 +67,8 @@ export default function Chat() {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [selectedOpenRouterModel, setSelectedOpenRouterModel] = useState<string>('openrouter/auto');
   const [webSearch, setWebSearch] = useState<boolean>(false);
+  const [openSources, setOpenSources] = useState(false);
+  const [selectedSources, setSelectedSources] = useState<WebSource[] | null>(null);
 
   const displayName = (user?.name || user?.email || 'there').split(' ')[0].split('@')[0];
   const salutation = (() => {
@@ -518,7 +521,14 @@ export default function Chat() {
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center gap-2">
                         {Array.isArray(m.sources) && m.sources.length > 0 && (
-                          <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-secondary border border-border">
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 px-2 py-1 rounded-full bg-secondary border border-border hover:bg-secondary/80"
+                            onClick={() => {
+                              setSelectedSources(m.sources || []);
+                              setOpenSources(true);
+                            }}
+                          >
                             <span className="text-xs text-muted-foreground">Sources</span>
                             <div className="flex items-center -space-x-1">
                               {(() => {
@@ -533,28 +543,24 @@ export default function Chat() {
                                   } catch { continue; }
                                 }
                                 return unique.slice(0, 4).map((s) => (
-                                <a
-                                  key={s.id}
-                                  href={s.link}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  title={s.source || s.title}
-                                  className="inline-flex h-5 w-5 rounded-full overflow-hidden ring-1 ring-border bg-muted"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={(s.favicon && s.favicon.length > 0) ? s.favicon : (() => { try { const host = new URL(s.link).hostname; return `https://icons.duckduckgo.com/ip3/${host}.ico`; } catch { return ''; } })()}
-                                    alt={s.source || 'source'}
-                                    className="h-full w-full object-cover"
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLImageElement).style.display = 'none';
-                                    }}
-                                  />
-                                </a>
+                                  <span
+                                    key={s.id}
+                                    title={s.source || s.title}
+                                    className="inline-flex h-5 w-5 rounded-full overflow-hidden ring-1 ring-border bg-muted"
+                                  >
+                                    <img
+                                      src={(s.favicon && s.favicon.length > 0) ? s.favicon : (() => { try { const host = new URL(s.link).hostname; return `https://icons.duckduckgo.com/ip3/${host}.ico`; } catch { return ''; } })()}
+                                      alt={s.source || 'source'}
+                                      className="h-full w-full object-cover"
+                                      onError={(e) => {
+                                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                      }}
+                                    />
+                                  </span>
                                 ));
                               })()}
                             </div>
-                          </div>
+                          </button>
                         )}
                       </div>
                       <Actions className="mt-0">
@@ -661,6 +667,50 @@ export default function Chat() {
             </div>
           </div>
         )}
+      {/* Sources Sheet */}
+      <Sheet open={openSources} onOpenChange={setOpenSources}>
+        <SheetContent side="right" className="sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Sources</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto p-4 pt-0 space-y-3">
+            {Array.isArray(selectedSources) && selectedSources.length > 0 ? (
+              selectedSources.map((s) => {
+                let host = '';
+                try { host = new URL(s.link).hostname; } catch {}
+                const favicon = (s.favicon && s.favicon.length > 0) ? s.favicon : (host ? `https://icons.duckduckgo.com/ip3/${host}.ico` : '');
+                return (
+                  <a
+                    key={s.id}
+                    href={s.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-start gap-3 rounded-md border p-3 hover:bg-accent"
+                  >
+                    <span className="inline-flex h-6 w-6 rounded-sm overflow-hidden ring-1 ring-border bg-muted mt-0.5">
+                      <img
+                        src={favicon}
+                        alt={s.source || 'source'}
+                        className="h-full w-full object-cover"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium text-sm truncate">{s.title || s.source || s.link}</span>
+                      <span className="block text-muted-foreground text-xs truncate">{host}</span>
+                      {s.snippet && (
+                        <span className="block text-muted-foreground text-xs line-clamp-2 mt-1">{s.snippet}</span>
+                      )}
+                    </span>
+                  </a>
+                );
+              })
+            ) : (
+              <div className="text-sm text-muted-foreground">No sources available.</div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
